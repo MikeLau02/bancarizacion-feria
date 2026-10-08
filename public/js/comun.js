@@ -41,12 +41,13 @@ async function api(url, opciones = {}) {
   } finally {
     clearTimeout(t);
   }
-  if (res.status === 401) {
-    if (!location.pathname.startsWith('/login')) location.href = '/login.html';
-    throw new Error('Su sesión terminó.');
-  }
   let datos = null;
   try { datos = await res.json(); } catch (_) { /* sin cuerpo */ }
+  // 401 en la pantalla de inicio = usuario o contraseña incorrectos; en otra pantalla = la sesión venció
+  if (res.status === 401 && !location.pathname.startsWith('/login')) {
+    location.href = '/login.html';
+    throw new Error('Su sesión terminó.');
+  }
   if (!res.ok) {
     const err = new Error((datos && datos.error) || `Error ${res.status}`);
     err.status = res.status;
