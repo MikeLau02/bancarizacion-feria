@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administración · Feria QR</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="icon" href="/favicon.svg">
+</head>
+<body>
+  <nav class="navbar navbar-expand-xl navbar-dark navbar-feria sticky-top">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#panel"><i class="bi bi-qr-code-scan"></i> <span id="nombreFeria" class="d-inline-block text-truncate align-bottom" style="max-width:170px">Feria QR</span></a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu" aria-label="Menú">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="menu">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item"><a class="nav-link" href="#panel"><i class="bi bi-speedometer2 d-xl-none d-xxl-inline"></i> Panel</a></li>
+          <li class="nav-item"><a class="nav-link" href="#personas"><i class="bi bi-people d-xl-none d-xxl-inline"></i> Personas</a></li>
+          <li class="nav-item"><a class="nav-link" href="#qr"><i class="bi bi-qr-code d-xl-none d-xxl-inline"></i> Códigos QR</a></li>
+          <li class="nav-item"><a class="nav-link" href="#emprendimientos"><i class="bi bi-shop d-xl-none d-xxl-inline"></i> Emprendimientos</a></li>
+          <li class="nav-item"><a class="nav-link" href="#transacciones"><i class="bi bi-receipt d-xl-none d-xxl-inline"></i> Transacciones</a></li>
+          <li class="nav-item"><a class="nav-link" href="#reportes"><i class="bi bi-file-earmark-spreadsheet d-xl-none d-xxl-inline"></i> Reportes</a></li>
+          <li class="nav-item"><a class="nav-link" href="#config"><i class="bi bi-gear d-xl-none d-xxl-inline"></i> Configuración</a></li>
+        </ul>
+        <form class="d-flex position-relative me-xl-2 my-2 my-xl-0" style="min-width:200px" id="formBuscar" role="search">
+          <input class="form-control" id="buscarGlobal" type="search" placeholder="Buscar nombre, curso, rol o código" autocomplete="off">
+          <div id="resultadosBuscar" class="dropdown-menu w-100 shadow" style="max-height: 60vh; overflow:auto"></div>
+        </form>
+        <div class="dropdown">
+          <button class="btn btn-outline-light dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> <span id="nombreUsuario" class="d-xl-none d-xxl-inline"></span></button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="#" id="btnCambiarClave"><i class="bi bi-key"></i> Cambiar contraseña</a></li>
+            <li><a class="dropdown-item" href="#" onclick="cerrarSesion()"><i class="bi bi-box-arrow-right"></i> Salir</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container-xl py-4" id="contenido"></main>
+
+  <!-- Modal genérico -->
+  <div class="modal fade" id="modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable" id="modalDialogo">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="modalTitulo"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body" id="modalCuerpo"></div>
+        <div class="modal-footer" id="modalPie"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/comun.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

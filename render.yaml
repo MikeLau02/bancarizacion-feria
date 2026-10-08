@@ -1,0 +1,26 @@
+# Plano (Blueprint) para Render: crea el servicio web de Feria QR.
+# La base MySQL va aparte (Render no ofrece MySQL): ver docs/PUBLICAR-EN-INTERNET.md, opción Render + Aiven.
+services:
+  - type: web
+    name: feria-qr
+    runtime: node
+    plan: free            # cámbielo a "starter" (US$7/mes) la semana de la feria
+    region: oregon
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run start:nube
+    healthCheckPath: /api/ping
+    envVars:
+      - key: TZ
+        value: America/Bogota
+      - key: TRUST_PROXY
+        value: "1"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false       # Render la pedirá al crear: pegue la "Service URI" de Aiven
+      - key: DB_SSL_CA
+        sync: false       # pegue el contenido de ca.pem de Aiven
+      - key: ADMIN_USUARIO
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false

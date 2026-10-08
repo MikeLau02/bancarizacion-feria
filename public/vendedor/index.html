@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#1f6feb">
+  <title>Ventas · Feria QR</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="icon" href="/favicon.svg">
+</head>
+<body>
+  <div id="bannerRed" class="sin-conexion alert alert-danger rounded-0 mb-0 text-center fw-bold d-none">
+    <i class="bi bi-wifi-off"></i> SIN CONEXIÓN · No se pueden confirmar compras hasta que vuelva la conexión
+  </div>
+  <nav class="navbar navbar-dark navbar-feria">
+    <div class="container-fluid vendedor px-3">
+      <span class="navbar-brand text-truncate mb-0"><i class="bi bi-shop"></i> <span id="nombreEmp">Ventas</span></span>
+      <div class="d-flex gap-2">
+        <button class="btn btn-light btn-sm fw-semibold" id="btnTabVentas"><i class="bi bi-receipt"></i> Mis ventas</button>
+        <button class="btn btn-outline-light btn-sm" onclick="cerrarSesion()" title="Salir"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="vendedor px-3 py-3">
+    <div class="pasos mb-3" id="pasos">
+      <span data-paso="1">ESCANEAR</span>›<span data-paso="2">SALDO</span>›<span data-paso="3">VALOR</span>›<span data-paso="4">CONFIRMAR</span>
+    </div>
+
+    <!-- PASO 1: escanear -->
+    <section id="vEscanear">
+      <button class="btn btn-primary btn-gigante py-4 mb-3" id="btnEscanear">
+        <i class="bi bi-qr-code-scan d-block" style="font-size:3.5rem"></i> ESCANEAR QR
+      </button>
+      <div id="zonaCamara" class="d-none mb-3">
+        <div id="lector"></div>
+        <button class="btn btn-outline-secondary btn-grande w-100 mt-2" id="btnCancelarCamara"><i class="bi bi-x-lg"></i> Cerrar cámara</button>
+      </div>
+      <div id="avisoHttps" class="alert alert-warning d-none small"></div>
+      <div class="row g-2">
+        <div class="col-6">
+          <label class="btn btn-outline-primary btn-grande w-100 h-100 mb-0 d-flex align-items-center justify-content-center gap-1">
+            <i class="bi bi-camera"></i> Foto del QR
+            <input type="file" accept="image/*" capture="environment" id="fotoQR" hidden>
+          </label>
+        </div>
+        <div class="col-6">
+          <button class="btn btn-outline-primary btn-grande w-100 h-100" id="btnManual"><i class="bi bi-keyboard"></i> Código</button>
+        </div>
+      </div>
+      <form id="formManual" class="mt-3 d-none">
+        <label class="form-label small text-secondary" for="codigoManual">Código impreso debajo del QR</label>
+        <div class="input-group input-group-lg">
+          <input class="form-control font-monospace" id="codigoManual" autocomplete="off" autocapitalize="none" placeholder="a1b2 c3d4 ...">
+          <button class="btn btn-primary" type="submit">Buscar</button>
+        </div>
+      </form>
+      <div id="lectorArchivo" class="d-none"></div>
+    </section>
+
+    <!-- PASO 2 y 3: ver saldo e ingresar valor -->
+    <section id="vSaldo" class="d-none">
+      <div class="card p-3 mb-3 text-center">
+        <div class="text-secondary small">COMPRADOR</div>
+        <div class="h3 fw-bold mb-0" id="cNombre"></div>
+        <div class="text-secondary fs-5" id="cCurso"></div>
+        <hr class="my-2">
+        <div class="text-secondary small" id="cEtiqueta">SALDO DISPONIBLE</div>
+        <div class="saldo-grande" id="cSaldo"></div>
+        <div id="cAlerta"></div>
+      </div>
+      <form id="formValor" novalidate>
+        <label class="form-label fw-bold fs-5" for="valor">Valor de la compra</label>
+        <input class="form-control valor-input mb-2" id="valor" inputmode="numeric" autocomplete="off" placeholder="$0">
+        <div class="row g-2 mb-3" id="montosRapidos"></div>
+        <div id="errorValor" class="alert alert-danger fw-semibold fs-5 d-none"></div>
+        <button class="btn btn-primary btn-gigante mb-2" type="submit" id="btnContinuar">CONTINUAR <i class="bi bi-arrow-right"></i></button>
+        <button class="btn btn-outline-secondary btn-grande w-100" type="button" data-accion="reiniciar">Cancelar</button>
+      </form>
+    </section>
+
+    <!-- PASO 4: confirmar -->
+    <section id="vConfirmar" class="d-none">
+      <div class="card p-4 mb-3 confirmacion">
+        <div class="text-center text-secondary mb-2">¿Confirmar la compra de <strong id="kNombre"></strong>?</div>
+        <div class="linea compra"><span>Compra:</span><strong id="kValor"></strong></div>
+        <div class="linea"><span>Saldo anterior:</span><strong id="kAnterior"></strong></div>
+        <div class="linea"><span>Saldo restante:</span><strong id="kRestante" class="text-success"></strong></div>
+        <div class="small text-secondary text-center mt-1" id="kReservado"></div>
+      </div>
+      <div id="errorConfirmar" class="alert alert-danger fw-semibold d-none"></div>
+      <button class="btn btn-success btn-gigante py-3 mb-2" id="btnConfirmar"><i class="bi bi-check-circle"></i> CONFIRMAR COMPRA</button>
+      <button class="btn btn-outline-secondary btn-grande w-100" id="btnVolver">Volver / cambiar valor</button>
+    </section>
+
+    <!-- Resultado -->
+    <section id="vResultado" class="d-none">
+      <div class="card p-4 mb-3 text-center" id="rTarjeta"></div>
+      <button class="btn btn-primary btn-gigante" data-accion="reiniciar"><i class="bi bi-qr-code-scan"></i> NUEVA VENTA</button>
+    </section>
+
+    <!-- Mis ventas -->
+    <section id="vVentas" class="d-none">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h4 fw-bold mb-0">Mis ventas</h2>
+        <button class="btn btn-primary" data-accion="reiniciar"><i class="bi bi-qr-code-scan"></i> Vender</button>
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-6"><div class="card p-3 tile"><div class="etiqueta">Vendido hoy</div><div class="valor" id="vHoy"></div><div class="small text-secondary" id="vHoyN"></div></div></div>
+        <div class="col-6"><div class="card p-3 tile"><div class="etiqueta">Total de la feria</div><div class="valor" id="vTotal"></div><div class="small text-secondary" id="vTotalN"></div></div></div>
+      </div>
+      <div class="card">
+        <div class="list-group list-group-flush" id="listaVentas"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/vendor/html5-qrcode/html5-qrcode.min.js"></script>
+  <script src="/js/comun.js"></script>
+  <script src="/js/vendedor.js"></script>
+</body>
+</html>

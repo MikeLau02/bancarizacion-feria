@@ -1,0 +1,36 @@
+{
+  "name": "feria-qr",
+  "version": "1.0.0",
+  "description": "Sistema de pagos con códigos QR para la Feria de Emprendimiento escolar",
+  "main": "src/server.js",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "start:nube": "node scripts/init-db.js && node src/server.js",
+    "dev": "node --watch src/server.js",
+    "db:init": "node scripts/init-db.js",
+    "db:demo": "node scripts/seed-demo.js",
+    "cert": "node scripts/generar-certificado.js",
+    "test": "node scripts/prueba-flujo.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "bcryptjs": "^3.0.3",
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
+    "dotenv": "^16.6.1",
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "express-mysql-session": "^3.0.3",
+    "express-session": "^1.19.0",
+    "html5-qrcode": "^2.3.8",
+    "mysql2": "^3.24.5",
+    "pdfkit": "^0.20.2",
+    "qrcode": "^1.5.4",
+    "selfsigned": "^5.5.0"
+  }
+}

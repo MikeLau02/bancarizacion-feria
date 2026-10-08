@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f6feb">
+  <title>Consultar mi saldo · Feria QR</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="icon" href="/favicon.svg">
+</head>
+<body>
+  <nav class="navbar navbar-dark navbar-feria">
+    <div class="container-fluid vendedor px-3">
+      <span class="navbar-brand mb-0"><i class="bi bi-wallet2"></i> Mi saldo de la feria</span>
+      <a class="btn btn-outline-light btn-sm" href="/login.html">Ingresar</a>
+    </div>
+  </nav>
+  <main class="vendedor px-3 py-3">
+    <!-- Buscar mi cuenta -->
+    <section id="vBuscar">
+      <p class="text-secondary">Escanee su código QR o escriba el código impreso debajo de él para ver su saldo y sus compras.</p>
+      <button class="btn btn-primary btn-gigante py-4 mb-3" id="btnEscanear"><i class="bi bi-qr-code-scan d-block" style="font-size:3rem"></i> ESCANEAR MI QR</button>
+      <div id="zonaCamara" class="d-none mb-3">
+        <div id="lector"></div>
+        <button class="btn btn-outline-secondary btn-grande w-100 mt-2" id="btnCerrar"><i class="bi bi-x-lg"></i> Cerrar cámara</button>
+      </div>
+      <div id="aviso" class="alert alert-warning d-none small"></div>
+      <label class="btn btn-outline-primary btn-grande w-100 mb-3">
+        <i class="bi bi-camera"></i> Tomar foto de mi QR
+        <input type="file" accept="image/*" capture="environment" id="fotoQR" hidden>
+      </label>
+      <form id="formCodigo" class="card p-3">
+        <label class="form-label fw-semibold" for="codigo">Código impreso debajo del QR</label>
+        <input class="form-control form-control-lg font-monospace mb-2" id="codigo" autocomplete="off" autocapitalize="none" placeholder="a1b2 c3d4 e5f6 ...">
+        <button class="btn btn-primary btn-grande" type="submit">Consultar</button>
+      </form>
+      <div id="lectorArchivo" class="d-none"></div>
+    </section>
+
+    <!-- Resultado -->
+    <section id="vCuenta" class="d-none">
+      <div class="card p-3 mb-3 text-center">
+        <div class="h3 fw-bold mb-0" id="nombre"></div>
+        <div class="text-secondary fs-5" id="curso"></div>
+        <div id="bloqueada"></div>
+        <hr class="my-2">
+        <div class="text-secondary small">PUEDE GASTAR HOY</div>
+        <div class="saldo-grande" id="hoy"></div>
+        <div class="row g-2 mt-1">
+          <div class="col-4"><div class="border rounded-3 p-2"><div class="small text-secondary">Día 1</div><div class="fw-bold" id="d1"></div></div></div>
+          <div class="col-4"><div class="border rounded-3 p-2"><div class="small text-secondary">Día 2</div><div class="fw-bold" id="d2"></div></div></div>
+          <div class="col-4"><div class="border rounded-3 p-2"><div class="small text-secondary">Total</div><div class="fw-bold" id="total"></div></div></div>
+        </div>
+        <div class="small text-secondary mt-2" id="regla"></div>
+      </div>
+      <div class="card mb-3"><div class="p-3 pb-0"><h2 class="h5 fw-bold">Mis compras</h2></div>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <thead><tr><th class="ps-3">Fecha</th><th>Emprendimiento</th><th class="num">Compra</th><th class="num pe-3">Queda</th></tr></thead>
+          <tbody id="compras"></tbody></table></div></div>
+      <div class="card mb-3"><div class="p-3 pb-0"><h2 class="h5 fw-bold">Cargas de saldo</h2></div>
+        <div class="list-group list-group-flush" id="recargas"></div></div>
+      <button class="btn btn-outline-primary btn-grande w-100 mb-2" id="btnActualizar"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+      <button class="btn btn-outline-secondary btn-grande w-100" id="btnOtra">Consultar otra cuenta</button>
+    </section>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/vendor/html5-qrcode/html5-qrcode.min.js"></script>
+  <script src="/js/comun.js"></script>
+  <script src="/js/consulta.js"></script>
+</body>
+</html>

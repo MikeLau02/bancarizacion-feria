@@ -1,0 +1,60 @@
+/* Feria QR · estilos propios (complementan Bootstrap 5) */
+:root {
+  --feria-primario: #1f6feb;
+  --feria-primario-osc: #174ea6;
+  --feria-fondo: #f4f7fb;
+  --feria-ok: #198754;
+  --feria-alerta: #f59f00;
+  --feria-error: #d63939;
+  --barra: #3b82f6;
+}
+body { background: var(--feria-fondo); }
+.navbar-feria { background: linear-gradient(90deg, var(--feria-primario-osc), var(--feria-primario)); }
+.navbar-feria .nav-link { white-space: nowrap; }
+.navbar-feria .navbar-brand { font-weight: 700; letter-spacing: .3px; }
+.card { border: 0; box-shadow: 0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.04); border-radius: 14px; }
+.tile .valor { font-size: 1.6rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .etiqueta { color: #5b6472; font-size: .85rem; }
+.tile .icono { font-size: 1.6rem; opacity: .85; }
+.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.table thead th { font-size: .8rem; text-transform: uppercase; letter-spacing: .3px; color: #5b6472; }
+.barra-wrap { background: #e9eef5; border-radius: 4px; height: 10px; min-width: 80px; }
+.barra { background: var(--barra); height: 10px; border-radius: 0 4px 4px 0; }
+.cursor { cursor: pointer; }
+.sin-conexion { position: sticky; top: 0; z-index: 1050; }
+
+/* ---------- Pantalla del vendedor ---------- */
+.vendedor { max-width: 560px; margin: 0 auto; }
+.btn-gigante { font-size: 1.5rem; font-weight: 700; padding: 1.1rem 1rem; border-radius: 16px; width: 100%; }
+.btn-grande { font-size: 1.2rem; font-weight: 600; padding: .85rem 1rem; border-radius: 14px; }
+.pasos { display: flex; gap: .5rem; justify-content: center; font-size: .78rem; font-weight: 600; color: #8a94a6; flex-wrap: wrap; }
+.pasos span.activo { color: var(--feria-primario); }
+.saldo-grande { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.valor-input { font-size: 2.2rem; font-weight: 700; text-align: center; border-radius: 14px; }
+.monto-rapido { font-size: 1.1rem; font-weight: 600; border-radius: 12px; padding: .7rem 0; }
+.confirmacion .linea { display: flex; justify-content: space-between; font-size: 1.35rem; padding: .35rem 0; }
+.confirmacion .linea strong { font-variant-numeric: tabular-nums; }
+.confirmacion .compra { font-size: 1.8rem; color: var(--feria-primario-osc); }
+#lector { width: 100%; border-radius: 14px; overflow: hidden; background: #000; min-height: 260px; }
+#lector video { border-radius: 14px; }
+.resultado-icono { font-size: 4.5rem; line-height: 1; }
+
+/* ---------- Tarjetas QR para imprimir ---------- */
+.hoja-qr { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.6cm, 1fr)); gap: .4cm; }
+.tarjeta-qr { border: 1px dashed #9aa4b2; border-radius: 10px; padding: .35cm; text-align: center; break-inside: avoid; page-break-inside: avoid; background: #fff; }
+.tarjeta-qr svg { width: 4.2cm; height: 4.2cm; }
+.tarjeta-qr .nombre { font-weight: 700; font-size: 11pt; line-height: 1.15; margin-top: .1cm; }
+.tarjeta-qr .curso { font-size: 10pt; color: #333; }
+.tarjeta-qr .codigo { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 7pt; color: #555; word-spacing: -1px; }
+.tarjeta-qr .feria { font-size: 7.5pt; color: #1f6feb; font-weight: 600; text-transform: uppercase; }
+@media print {
+  .no-imprimir { display: none !important; }
+  body { background: #fff; }
+  .hoja-qr { grid-template-columns: repeat(3, 1fr); }
+  @page { margin: 1cm; }
+}
+.tile > div > div:first-child { min-width: 0; }
+@media (max-width: 575.98px) {
+  .tile .valor { font-size: 1.2rem; }
+  .tile .icono { display: none; }
+}

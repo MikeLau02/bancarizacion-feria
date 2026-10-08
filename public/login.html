@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ingresar · Feria QR</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="icon" href="/favicon.svg">
+</head>
+<body class="d-flex align-items-center min-vh-100">
+  <main class="container" style="max-width: 420px">
+    <div class="text-center mb-4">
+      <div class="display-4 text-primary"><i class="bi bi-qr-code-scan"></i></div>
+      <h1 class="h3 fw-bold mb-0">Feria de Emprendimiento</h1>
+      <p class="text-secondary">Pagos con código QR</p>
+    </div>
+    <div class="card p-4">
+      <form id="form" novalidate>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="usuario">Usuario</label>
+          <input class="form-control form-control-lg" id="usuario" autocomplete="username" autocapitalize="none" required autofocus>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="password">Contraseña</label>
+          <input class="form-control form-control-lg" id="password" type="password" autocomplete="current-password" required>
+        </div>
+        <div id="error" class="alert alert-danger d-none py-2"></div>
+        <button class="btn btn-primary btn-grande w-100" id="btn" type="submit"><i class="bi bi-box-arrow-in-right"></i> Ingresar</button>
+      </form>
+    </div>
+    <p class="text-center text-secondary small mt-3">Administradores y vendedores usan esta misma página.</p>
+    <a class="btn btn-outline-primary btn-grande w-100" href="/consulta/"><i class="bi bi-wallet2"></i> Soy comprador: consultar mi saldo</a>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/comun.js"></script>
+  <script>
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn');
+      const err = document.getElementById('error');
+      err.classList.add('d-none');
+      btn.disabled = true;
+      try {
+        const r = await api('/api/auth/login', { method: 'POST', body: {
+          usuario: document.getElementById('usuario').value, password: document.getElementById('password').value } });
+        location.href = r.destino;
+      } catch (ex) {
+        err.textContent = ex instanceof ErrorRed ? 'No hay conexión con el servidor de la feria.' : ex.message;
+        err.classList.remove('d-none');
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
