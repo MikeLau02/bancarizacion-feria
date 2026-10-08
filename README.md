@@ -319,6 +319,8 @@ persona **saldo total = saldo día 1 + saldo día 2** (lo garantiza una restricc
 | Los celulares no abren la página | Deben estar en la misma red Wi‑Fi que el servidor. Revise el firewall de Windows: permita Node.js en redes privadas (puertos 3000 y 3443). |
 | La cámara no abre | Use la dirección `https://…:3443` (ver 2.6) y permita la cámara. Mientras tanto use "Foto del QR". |
 | "QR no registrado" con un QR correcto | Es posible que se haya generado un QR nuevo para esa persona: imprima el actual desde su ficha. |
+| "Usuario o contraseña incorrectos" con el administrador | Restablezca la contraseña: ponga en `.env` `ADMIN_USUARIO` y `ADMIN_PASSWORD` y ejecute `npm run admin:restablecer`. En Render, agregue la variable `ADMIN_RESTABLECER=1` (ver la guía de internet). |
+| Los vendedores de prueba no entran | Solo existen si cargó la demostración (`npm run db:demo`). Los reales se crean en **Emprendimientos** con su usuario y contraseña. |
 | El día 1 no deja comprar más | Ya gastó su saldo del día 1; el del día 2 está reservado. Si el comprador quiere, recárguele saldo asignado al día 1. |
 
 ## 9. Si ya había instalado la versión anterior

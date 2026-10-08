@@ -9,6 +9,7 @@
     "start:nube": "node scripts/init-db.js && node src/server.js",
     "dev": "node --watch src/server.js",
     "db:init": "node scripts/init-db.js",
+    "admin:restablecer": "node scripts/init-db.js --restablecer-admin",
     "db:demo": "node scripts/seed-demo.js",
     "cert": "node scripts/generar-certificado.js",
     "test": "node scripts/prueba-flujo.js"

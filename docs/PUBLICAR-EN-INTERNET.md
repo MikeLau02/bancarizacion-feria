@@ -47,6 +47,12 @@ La instancia de US$7 no se duerme y alcanza de sobra para una feria escolar (la 
 4. Al terminar, Render le da la dirección `https://feria-qr.onrender.com` (con HTTPS: la cámara funciona).
    Entre como administrador y cambie la contraseña.
 
+### Si no puede entrar como administrador
+En Render → el servicio → **Environment**: escriba en `ADMIN_PASSWORD` la contraseña que quiera (sin espacios al
+inicio o al final) y agregue la variable `ADMIN_RESTABLECER` con valor `1`. Guarde: Render reinicia la app y deja al
+usuario `admin` con esa contraseña. Cuando haya entrado, **borre** la variable `ADMIN_RESTABLECER`.
+Los vendedores se crean después, dentro de la app, en **Emprendimientos** (usuario y contraseña de cada puesto).
+
 ### Paso 3: la semana de la feria
 - En Render → el servicio → **Settings → Instance Type** → elija la de **US$7**. Después de la feria vuelva a **Free**.
   Render cobra en proporción al tiempo usado; revise el valor exacto en su panel de facturación.
@@ -184,6 +190,7 @@ agregue `DB_SSL=1`.
 | `TRUST_PROXY` | `1` cuando hay un proxy delante (Railway, Render, Fly.io). Necesario para que la sesión segura (HTTPS) funcione. |
 | `SESSION_SECRET` | Frase larga y secreta. Sin ella cualquiera podría falsificar sesiones. |
 | `PORT` | Puerto interno; los hostings lo ponen solos. |
+| `ADMIN_RESTABLECER` | `1` solo para recuperar el acceso: al arrancar deja al administrador con la contraseña de `ADMIN_PASSWORD`. Quítela después. |
 | `HTTPS` | Déjelo en `0`: en internet el HTTPS lo da el hosting o nginx. |
 
 ## Varios administradores al mismo tiempo

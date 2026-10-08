@@ -29,8 +29,21 @@ const { ahora } = require('../src/utils');
   await conn.query(sql);
   console.log(`✔ Tablas creadas/verificadas en la base "${database}".`);
 
+  const restablecer = process.env.ADMIN_RESTABLECER === '1' || process.argv.includes('--restablecer-admin');
   const [admins] = await conn.query("SELECT COUNT(*) AS n FROM usuarios WHERE rol = 'ADMIN'");
-  if (admins[0].n === 0) {
+  if (restablecer) {
+    // Recupera el acceso: deja el usuario ADMIN_USUARIO activo y con la contraseña ADMIN_PASSWORD
+    const usuario = config.admin.usuario.toLowerCase();
+    const hash = await bcrypt.hash(config.admin.password, 10);
+    const [r] = await conn.query("UPDATE usuarios SET password_hash = ?, activo = 1 WHERE usuario = ? AND rol = 'ADMIN'", [hash, usuario]);
+    if (!r.affectedRows) {
+      await conn.query(
+        "INSERT INTO usuarios (usuario, password_hash, nombre, rol, creado_en) VALUES (?,?,?,'ADMIN',?)",
+        [usuario, hash, config.admin.nombre, ahora()]);
+    }
+    console.log(`✔ Administrador restablecido → usuario: ${usuario}  (contraseña: la de ADMIN_PASSWORD)`);
+    if (process.env.ADMIN_RESTABLECER === '1') console.log('  Quite la variable ADMIN_RESTABLECER cuando haya entrado.');
+  } else if (admins[0].n === 0) {
     await conn.query(
       "INSERT INTO usuarios (usuario, password_hash, nombre, rol, creado_en) VALUES (?,?,?,'ADMIN',?)",
       [config.admin.usuario.toLowerCase(), await bcrypt.hash(config.admin.password, 10), config.admin.nombre, ahora()]);
