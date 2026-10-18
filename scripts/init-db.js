@@ -59,6 +59,10 @@ const { ahora } = require('../src/utils');
   } else {
     console.log('ℹ Ya existe al menos un administrador; no se creó otro.');
   }
+  // Reinicio interno después de la prueba piloto (solo si se define REINICIAR_PILOTO; se hace una vez por valor)
+  if (process.env.REINICIAR_PILOTO) {
+    await require('../src/services/reinicio').reiniciarSiSePide(conn, process.env.REINICIAR_PILOTO);
+  }
   await conn.end();
 })().catch((err) => {
   console.error('✖ Error al preparar la base de datos:', err.message);

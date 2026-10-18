@@ -349,6 +349,39 @@ function cliente(base) {
     assert.equal((await vend('GET', '/api/admin/historial')).status, 403);
     paso('métricas (ventas por hora, por día, por usuario) e historial de quién hizo qué, con filtros y exportación a Excel');
 
+    // ---------- reinicio interno después de la prueba piloto
+    const { reiniciarSiSePide } = require('../src/services/reinicio');
+    const cxR = await mysql.createConnection(config.db);
+    const [[{ n: personasAntes }]] = await cxR.query('SELECT COUNT(*) AS n FROM estudiantes');
+    const [[{ n: adminsAntes }]] = await cxR.query("SELECT COUNT(*) AS n FROM usuarios WHERE rol = 'ADMIN'");
+    const [[{ t: tokenAntes }]] = await cxR.query('SELECT qr_token AS t FROM estudiantes WHERE id = ?', [id]);
+    await reiniciarSiSePide(cxR, 'prueba-1', () => {});
+    const [[res]] = await cxR.query(`SELECT (SELECT COUNT(*) FROM transacciones) AS ventas, (SELECT COUNT(*) FROM recargas) AS cargas,
+      (SELECT COUNT(*) FROM emprendimientos) AS emp, (SELECT COUNT(*) FROM usuarios WHERE rol = 'VENDEDOR') AS vend,
+      (SELECT COUNT(*) FROM auditoria) AS hist, (SELECT COUNT(*) FROM estudiantes) AS personas,
+      (SELECT COUNT(*) FROM estudiantes WHERE estado = 'BLOQUEADA' AND saldo = 0 AND saldo_dia1 = 0 AND saldo_dia2 = 0) AS bloq0,
+      (SELECT COUNT(*) FROM usuarios WHERE rol = 'ADMIN') AS admins, (SELECT COUNT(*) FROM cursos) AS cursos`);
+    assert.deepEqual([res.ventas, res.cargas, res.emp, res.vend, res.hist], [0, 0, 0, 0, 1]);
+    assert.deepEqual([res.personas, res.bloq0, res.admins], [personasAntes, personasAntes, adminsAntes]);
+    assert.ok(res.cursos >= 15);
+    assert.equal((await cxR.query('SELECT qr_token AS t FROM estudiantes WHERE id = ?', [id]))[0][0].t, tokenAntes);
+    // con el mismo valor no vuelve a borrar
+    await cxR.query("INSERT INTO cursos (nombre, creado_en) VALUES ('ZZ', NOW())");
+    assert.equal(await reiniciarSiSePide(cxR, 'prueba-1', () => {}), null);
+    await cxR.end();
+    // el vendedor ya no existe; la persona bloqueada se activa con su primera recarga
+    assert.equal((await vend('POST', '/api/ventas/consultar', { qr })).status, 401);
+    const primera = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'RECARGA', valor: 20000, dia: 'DIA1' });
+    assert.equal(primera.datos.activada, true);
+    assert.deepEqual([primera.datos.valor_dia1, primera.datos.valor_dia2], [10000, 10000]);
+    const [{ estado: est1, saldo_inicial: si1 }] = await query('SELECT estado, saldo_inicial FROM estudiantes WHERE id = ?', [id]);
+    assert.deepEqual([est1, si1], ['ACTIVA', 20000]);
+    await admin('PUT', `/api/admin/personas/${id}/estado`, { estado: 'BLOQUEADA' });
+    const segunda = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'RECARGA', valor: 5000, dia: 'DIA1' });
+    assert.equal(segunda.datos.activada, false);
+    assert.equal((await query('SELECT estado FROM estudiantes WHERE id = ?', [id]))[0].estado, 'BLOQUEADA');
+    paso('reinicio interno tras la prueba piloto: borra ventas, cargas, emprendimientos e historial, conserva personas y QR, todas en $0 bloqueadas; la primera recarga activa la cuenta');
+
     // ---------- inmutabilidad
     await assert.rejects(query("UPDATE estudiantes SET saldo = -1 WHERE id = ?", [id]));
     paso('la base de datos rechaza saldos negativos aunque se modifique directamente');

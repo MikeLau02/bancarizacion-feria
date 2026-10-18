@@ -5,7 +5,7 @@ const C = document.getElementById('contenido');
 const S = { yo: null, cursos: [], emprendimientos: [], cfg: null, refresco: null };
 const TIPOS = { ESTUDIANTE: 'Estudiante', DOCENTE: 'Docente', DIRECTIVO: 'Directivo', ADMINISTRATIVO: 'Administrativo', FAMILIA: 'Familia', OTRO: 'Otro' };
 const ACCIONES = {
-  ANULAR_COMPRA: 'Anuló una compra', CREAR_PERSONA: 'Registró una persona', EDITAR_PERSONA: 'Editó una persona',
+  ANULAR_COMPRA: 'Anuló una compra', REINICIO_PILOTO: 'Reinició todo después de la prueba piloto', CREAR_PERSONA: 'Registró una persona', EDITAR_PERSONA: 'Editó una persona',
   BLOQUEAR_CUENTA: 'Bloqueó una cuenta', ACTIVAR_CUENTA: 'Activó una cuenta', REGENERAR_QR: 'Generó un QR nuevo',
   IMPORTAR_PERSONAS: 'Importó personas', BLOQUEO_MASIVO: 'Bloqueó cuentas en grupo', ACTIVACION_MASIVA: 'Activó cuentas en grupo', CARGAR_CURSOS: 'Cargó los cursos del colegio', CREAR_EMPRENDIMIENTO: 'Registró un emprendimiento', EDITAR_EMPRENDIMIENTO: 'Editó un emprendimiento',
   INICIO_SESION: 'Inició sesión', INICIO_FALLIDO: 'Intento de ingreso fallido', CIERRE_SESION: 'Cerró sesión', CAMBIAR_PASSWORD: 'Cambió su contraseña',
@@ -365,7 +365,7 @@ function formSaldo(p, tipo) {
         if (d.signo === '-1') valor = -valor;
         if (valor < 0 && d.dia === 'AMBOS') throw new Error('Para restar, elija de qué día se descuenta (día 1 o día 2).');
         const r = await api(`/api/admin/personas/${p.id}/saldo`, { method: 'POST', body: { tipo, valor, dia: d.dia, observacion: d.observacion } });
-        aviso(`Saldo actualizado: ${pesos(r.saldo_anterior)} → ${pesos(r.saldo_nuevo)} (día 1 ${r.valor_dia1 >= 0 ? '+' : ''}${pesos(r.valor_dia1)}, día 2 ${r.valor_dia2 >= 0 ? '+' : ''}${pesos(r.valor_dia2)})`);
+        aviso(`Saldo actualizado: ${pesos(r.saldo_anterior)} → ${pesos(r.saldo_nuevo)} (día 1 ${r.valor_dia1 >= 0 ? '+' : ''}${pesos(r.valor_dia1)}, día 2 ${r.valor_dia2 >= 0 ? '+' : ''}${pesos(r.valor_dia2)})${r.activada ? '. Primera recarga: la cuenta quedó ACTIVA.' : ''}`);
         navegar();
       },
     }],

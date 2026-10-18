@@ -257,7 +257,7 @@ async function moverSaldo(conn, { estudianteId, adminId, tipo, valor, dia, obser
   if (Math.abs(valor) > 10000000) throw new ErrorApp(400, 'Valor demasiado alto.');
   if (!['DIA1', 'DIA2', 'AMBOS'].includes(dia)) dia = 'AMBOS';
   const cfg = await obtenerConfig(conn);
-  const [[est]] = await conn.query('SELECT id, saldo, saldo_dia1, saldo_dia2 FROM estudiantes WHERE id = ? FOR UPDATE', [estudianteId]);
+  const [[est]] = await conn.query('SELECT id, saldo, saldo_dia1, saldo_dia2, estado FROM estudiantes WHERE id = ? FOR UPDATE', [estudianteId]);
   if (!est) throw new ErrorApp(404, 'La persona no existe.');
   const [[previas]] = await conn.query('SELECT COUNT(*) AS n FROM recargas WHERE estudiante_id = ?', [est.id]);
   if (previas.n === 0 && valor > 0) dia = 'AMBOS'; // primera carga: mitad para cada día
@@ -276,9 +276,15 @@ async function moverSaldo(conn, { estudianteId, adminId, tipo, valor, dia, obser
   await conn.query(
     `INSERT INTO recargas (estudiante_id, admin_id, tipo, dia, valor, valor_dia1, valor_dia2, saldo_anterior, saldo_nuevo, observacion, fecha_hora)
      VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [est.id, adminId, tipo, dia, valor, d1, d2, est.saldo, nuevo, observacion || null, fecha]);
-  await conn.query('UPDATE estudiantes SET saldo = ?, saldo_dia1 = saldo_dia1 + ?, saldo_dia2 = saldo_dia2 + ?, actualizado_en = ? WHERE id = ?',
-    [nuevo, d1, d2, fecha, est.id]);
-  return { saldo_anterior: est.saldo, saldo_nuevo: nuevo, valor, dia, valor_dia1: d1, valor_dia2: d2, fecha_hora: fecha };
+  // La primera carga activa la cuenta (después de reiniciar la prueba piloto todas quedan bloqueadas
+  // hasta su primera recarga). Una cuenta bloqueada a mano que ya tenía cargas sigue bloqueada.
+  const primera = previas.n === 0 && valor > 0;
+  const activada = primera && est.estado === 'BLOQUEADA';
+  await conn.query(
+    `UPDATE estudiantes SET saldo = ?, saldo_dia1 = saldo_dia1 + ?, saldo_dia2 = saldo_dia2 + ?, actualizado_en = ?
+       ${primera ? ', saldo_inicial = ?' : ''}${activada ? ", estado = 'ACTIVA'" : ''} WHERE id = ?`,
+    [nuevo, d1, d2, fecha, ...(primera ? [valor] : []), est.id]);
+  return { saldo_anterior: est.saldo, saldo_nuevo: nuevo, valor, dia, valor_dia1: d1, valor_dia2: d2, fecha_hora: fecha, activada };
 }
 
 /** Consulta del propio comprador: saldo por día e historial (sin datos de otros). */

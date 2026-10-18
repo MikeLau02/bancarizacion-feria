@@ -191,6 +191,7 @@ agregue `DB_SSL=1`.
 | `SESSION_SECRET` | Frase larga y secreta. Sin ella cualquiera podría falsificar sesiones. |
 | `PORT` | Puerto interno; los hostings lo ponen solos. |
 | `ADMIN_RESTABLECER` | `1` solo para recuperar el acceso: al arrancar deja al administrador con la contraseña de `ADMIN_PASSWORD`. Quítela después. |
+| `REINICIAR_PILOTO` | Una fecha (p. ej. `2026-10-18`) para dejar todo en cero después de la prueba piloto, una sola vez. Ver README, sección 11. Bórrela después. |
 | `HTTPS` | Déjelo en `0`: en internet el HTTPS lo da el hosting o nginx. |
 
 ## Varios administradores al mismo tiempo

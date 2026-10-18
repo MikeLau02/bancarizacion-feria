@@ -349,3 +349,17 @@ y luego `npm run db:init`.
 La guía completa está en [docs/PUBLICAR-EN-INTERNET.md](docs/PUBLICAR-EN-INTERNET.md): Render + Aiven (prueba piloto casi gratis), Railway (la más sencilla, HTTPS
 automático), servidor propio con nginx y Let's Encrypt, o Docker. También explica cómo crear varias cuentas de
 administrador para registrar personas al mismo tiempo y cómo cargar todos los usuarios desde Excel o CSV.
+
+## 11. Reiniciar después de la prueba piloto (uso interno)
+
+Deja la base lista para la feria real: **borra** todas las ventas, cargas de saldo, emprendimientos (con sus usuarios
+vendedores) y el historial. **Conserva** las personas con su QR (los QR impresos siguen sirviendo), los cursos, los
+administradores y la configuración. Todas las personas quedan con saldo $0 y **bloqueadas**; cada una se **activa sola
+con su primera recarga** (una cuenta bloqueada a mano que ya tenía cargas no se desbloquea al recargar).
+No hay botón en la app; se hace de forma interna y no se puede deshacer. Descargue antes los reportes en Excel si los
+quiere guardar.
+
+- **En Render:** servicio → **Environment** → agregue `REINICIAR_PILOTO` con la fecha de hoy (p. ej. `2026-10-18`) y
+  guarde. Al reiniciarse, la app hace el reinicio **una sola vez** (si se vuelve a reiniciar con el mismo valor, no
+  borra nada). Revise en **Logs** la línea "✔ Reinicio de la prueba piloto hecho" y luego borre la variable.
+- **Desde su computador** (con `DATABASE_URL` de la base en `.env`): `npm run reiniciar-piloto -- --confirmar`

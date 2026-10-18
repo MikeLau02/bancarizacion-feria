@@ -10,6 +10,7 @@
     "dev": "node --watch src/server.js",
     "db:init": "node scripts/init-db.js",
     "admin:restablecer": "node scripts/init-db.js --restablecer-admin",
+    "reiniciar-piloto": "node scripts/reiniciar-piloto.js",
     "db:demo": "node scripts/seed-demo.js",
     "cert": "node scripts/generar-certificado.js",
     "test": "node scripts/prueba-flujo.js"

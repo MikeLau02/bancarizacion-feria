@@ -6,7 +6,7 @@
 const { query } = require('../db');
 
 const ACCIONES = {
-  ANULAR_COMPRA: 'Anuló una compra', CREAR_PERSONA: 'Registró una persona', EDITAR_PERSONA: 'Editó una persona',
+  ANULAR_COMPRA: 'Anuló una compra', REINICIO_PILOTO: 'Reinició todo después de la prueba piloto', CREAR_PERSONA: 'Registró una persona', EDITAR_PERSONA: 'Editó una persona',
   BLOQUEAR_CUENTA: 'Bloqueó una cuenta', ACTIVAR_CUENTA: 'Activó una cuenta', REGENERAR_QR: 'Generó un QR nuevo',
   IMPORTAR_PERSONAS: 'Importó personas', BLOQUEO_MASIVO: 'Bloqueó cuentas en grupo', ACTIVACION_MASIVA: 'Activó cuentas en grupo',
   CARGAR_CURSOS: 'Cargó los cursos del colegio', CREAR_EMPRENDIMIENTO: 'Registró un emprendimiento',
