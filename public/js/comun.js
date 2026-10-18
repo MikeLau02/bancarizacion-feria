@@ -23,6 +23,9 @@ function aEntero(v) {
 }
 
 class ErrorRed extends Error {}
+/** La pantalla que pidió los datos ya se cerró (el usuario cambió de pestaña): se ignora. */
+class ErrorNavegacion extends Error {}
+window.addEventListener('unhandledrejection', (e) => { if (e.reason instanceof ErrorNavegacion) e.preventDefault(); });
 
 /**
  * Llama a la API. Lanza ErrorRed si no hubo conexión (la operación no se sabe si llegó),
@@ -33,13 +36,21 @@ async function api(url, opciones = {}) {
   if (o.body && typeof o.body !== 'string') { o.body = JSON.stringify(o.body); o.headers['Content-Type'] = 'application/json'; }
   let res;
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), opciones.timeout || 15000);
+  const esConsulta = o.method === 'GET';
+  // Las consultas esperan más: en hostings gratuitos el servidor puede tardar en "despertar"
+  const t = setTimeout(() => ctrl.abort(), opciones.timeout || (esConsulta ? 75000 : 15000));
+  // Las consultas de una pantalla se cancelan si el usuario se va a otra pestaña
+  const nav = esConsulta ? window.senalNavegacion : null;
+  const cancelar = () => ctrl.abort();
+  if (nav) { if (nav.aborted) throw new ErrorNavegacion('Pantalla cerrada'); nav.addEventListener('abort', cancelar); }
   try {
     res = await fetch(url, { ...o, signal: ctrl.signal });
   } catch (e) {
+    if (nav && nav.aborted) throw new ErrorNavegacion('Pantalla cerrada');
     throw new ErrorRed('Sin conexión con el servidor.');
   } finally {
     clearTimeout(t);
+    if (nav) nav.removeEventListener('abort', cancelar);
   }
   let datos = null;
   try { datos = await res.json(); } catch (_) { /* sin cuerpo */ }
@@ -59,6 +70,7 @@ async function api(url, opciones = {}) {
 
 /** Mensaje flotante breve. tipo: success | danger | warning | info */
 function aviso(mensaje, tipo = 'success') {
+  if (mensaje === 'Pantalla cerrada') return; // consulta cancelada al cambiar de pestaña
   let cont = document.getElementById('avisos');
   if (!cont) {
     cont = document.createElement('div');

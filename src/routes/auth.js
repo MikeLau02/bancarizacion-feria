@@ -5,6 +5,8 @@ const { query } = require('../db');
 const { asyncH, ahora, texto, ErrorApp } = require('../utils');
 const { obtenerConfig } = require('../services/configuracion');
 
+const { auditar } = require('../services/auditoria');
+
 const router = express.Router();
 
 // Protección básica contra adivinar contraseñas: 10 intentos fallidos por usuario y conexión cada 10 minutos.
@@ -31,6 +33,7 @@ router.post('/login', asyncH(async (req, res) => {
   const [u] = await query('SELECT * FROM usuarios WHERE usuario = ?', [usuario]);
   if (!u || !(await bcrypt.compare(password, u.password_hash))) {
     sumarIntento(ip);
+    await auditar(null, u ? u.id : null, 'INICIO_FALLIDO', 'usuarios', u ? u.id : null, { usuario_escrito: usuario, ip: req.ip });
     throw new ErrorApp(401, 'Usuario o contraseña incorrectos.');
   }
   if (!u.activo) throw new ErrorApp(403, 'Este usuario está desactivado. Consulte con el administrador.');
@@ -38,15 +41,17 @@ router.post('/login', asyncH(async (req, res) => {
   await new Promise((ok, mal) => req.session.regenerate((e) => (e ? mal(e) : ok())));
   req.session.usuarioId = u.id;
   await query('UPDATE usuarios SET ultimo_acceso = ? WHERE id = ?', [ahora(), u.id]);
+  await auditar(null, u.id, 'INICIO_SESION', 'usuarios', u.id, { ip: req.ip });
   res.json({ ok: true, rol: u.rol, destino: u.rol === 'ADMIN' ? '/admin/' : '/vendedor/' });
 }));
 
-router.post('/logout', (req, res) => {
+router.post('/logout', asyncH(async (req, res) => {
+  if (req.usuario) await auditar(null, req.usuario.id, 'CIERRE_SESION', 'usuarios', req.usuario.id, null);
   req.session.destroy(() => {
     res.clearCookie('feria.sid');
     res.json({ ok: true });
   });
-});
+}));
 
 router.get('/yo', asyncH(async (req, res) => {
   if (!req.usuario) return res.status(401).json({ error: 'Sin sesión' });
@@ -62,6 +67,7 @@ router.post('/cambiar-password', asyncH(async (req, res) => {
   const [u] = await query('SELECT password_hash FROM usuarios WHERE id = ?', [req.usuario.id]);
   if (!(await bcrypt.compare(String(actual || ''), u.password_hash))) throw new ErrorApp(400, 'La contraseña actual no es correcta.');
   await query('UPDATE usuarios SET password_hash = ? WHERE id = ?', [await bcrypt.hash(String(nueva), 10), req.usuario.id]);
+  await auditar(null, req.usuario.id, 'CAMBIAR_PASSWORD', 'usuarios', req.usuario.id, null);
   res.json({ ok: true });
 }));
 

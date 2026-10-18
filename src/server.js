@@ -5,6 +5,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const express = require('express');
+const compression = require('compression');
 const session = require('express-session');
 const MySQLStore = require('express-mysql-session')(session);
 const { pool } = require('./db');
@@ -22,6 +23,8 @@ app.use((req, res, next) => {
   next();
 });
 
+// Comprime las respuestas (listas y reportes pesan hasta 10 veces menos por internet)
+app.use(compression());
 app.use(express.json({ limit: '5mb' }));
 
 // Sesiones guardadas en MySQL: sobreviven a reinicios del servidor
@@ -54,9 +57,11 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Ruta no encontrada'
 
 // Librerías del navegador servidas localmente: la feria funciona aunque no haya Internet, solo red local
 const nm = (p) => path.join(__dirname, '..', 'node_modules', p);
-app.use('/vendor/bootstrap', express.static(nm('bootstrap/dist')));
-app.use('/vendor/bootstrap-icons', express.static(nm('bootstrap-icons/font')));
-app.use('/vendor/html5-qrcode', express.static(nm('html5-qrcode')));
+// Las librerías no cambian: el navegador las guarda una semana y no las vuelve a pedir en cada pantalla
+const libreria = { maxAge: '7d' };
+app.use('/vendor/bootstrap', express.static(nm('bootstrap/dist'), libreria));
+app.use('/vendor/bootstrap-icons', express.static(nm('bootstrap-icons/font'), libreria));
+app.use('/vendor/html5-qrcode', express.static(nm('html5-qrcode'), libreria));
 
 // Páginas protegidas por rol
 const publico = path.join(__dirname, '..', 'public');

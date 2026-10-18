@@ -7,7 +7,8 @@ const TIPOS = { ESTUDIANTE: 'Estudiante', DOCENTE: 'Docente', DIRECTIVO: 'Direct
 const ACCIONES = {
   ANULAR_COMPRA: 'Anuló una compra', CREAR_PERSONA: 'Registró una persona', EDITAR_PERSONA: 'Editó una persona',
   BLOQUEAR_CUENTA: 'Bloqueó una cuenta', ACTIVAR_CUENTA: 'Activó una cuenta', REGENERAR_QR: 'Generó un QR nuevo',
-  IMPORTAR_PERSONAS: 'Importó personas', CREAR_EMPRENDIMIENTO: 'Registró un emprendimiento', EDITAR_EMPRENDIMIENTO: 'Editó un emprendimiento',
+  IMPORTAR_PERSONAS: 'Importó personas', BLOQUEO_MASIVO: 'Bloqueó cuentas en grupo', ACTIVACION_MASIVA: 'Activó cuentas en grupo', CARGAR_CURSOS: 'Cargó los cursos del colegio', CREAR_EMPRENDIMIENTO: 'Registró un emprendimiento', EDITAR_EMPRENDIMIENTO: 'Editó un emprendimiento',
+  INICIO_SESION: 'Inició sesión', INICIO_FALLIDO: 'Intento de ingreso fallido', CIERRE_SESION: 'Cerró sesión', CAMBIAR_PASSWORD: 'Cambió su contraseña',
   CAMBIAR_CONFIGURACION: 'Cambió la configuración', CREAR_ADMIN: 'Creó un administrador', EDITAR_ADMIN: 'Editó un administrador',
 };
 
@@ -78,7 +79,7 @@ async function cargarCatalogos() {
 // ===================================================================== navegación
 const RUTAS = {
   panel: vistaPanel, personas: vistaPersonas, persona: vistaPersona, qr: vistaQR, emprendimientos: vistaEmprendimientos,
-  transacciones: vistaTransacciones, reportes: vistaReportes, config: vistaConfig,
+  transacciones: vistaTransacciones, metricas: vistaMetricas, reportes: vistaReportes, config: vistaConfig,
 };
 async function navegar() {
   clearInterval(S.refresco);
@@ -87,10 +88,25 @@ async function navegar() {
   document.querySelectorAll('#menu .nav-link').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + (ruta === 'persona' ? 'personas' : ruta)));
   const menu = bootstrap.Collapse.getInstance(qs('#menu'));
   if (menu) menu.hide();
+  // Cancela lo que la pantalla anterior seguía cargando, para que no se dibuje encima de la nueva
+  if (S.navegacion) S.navegacion.abort();
+  const nav = new AbortController();
+  S.navegacion = nav;
+  window.senalNavegacion = nav.signal;
   cargando();
-  try { await (RUTAS[ruta] || vistaPanel)(id); } catch (e) { errorPantalla(e); }
+  const aviso5s = setTimeout(() => {
+    const sp = C.querySelector('.spinner-border');
+    if (sp && S.navegacion === nav) sp.insertAdjacentHTML('afterend', '<p class="mt-3">El servidor está respondiendo lento o se está activando. Puede tardar hasta un minuto la primera vez.</p>');
+  }, 5000);
+  try {
+    await (RUTAS[ruta] || vistaPanel)(id);
+  } catch (e) {
+    if (!(e instanceof ErrorNavegacion) && S.navegacion === nav) errorPantalla(e);
+  } finally { clearTimeout(aviso5s); }
 }
 window.addEventListener('hashchange', navegar);
+// Mantiene el servidor activo mientras el panel esté abierto (en Render gratis se duerme tras 15 minutos sin uso)
+setInterval(() => { fetch('/api/ping', { cache: 'no-store' }).catch(() => {}); }, 4 * 60 * 1000);
 
 // ===================================================================== PANEL
 function tile(icono, etiqueta, valor, color, enlace) {
@@ -193,6 +209,12 @@ async function vistaPersonas() {
         <button class="btn btn-primary" id="btnNueva"><i class="bi bi-person-plus"></i> Nueva persona</button>
         <button class="btn btn-outline-primary" id="btnImportar"><i class="bi bi-upload"></i> Importar Excel/CSV</button>
         <a class="btn btn-outline-secondary" href="/api/admin/reportes/estudiantes?formato=xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+        <div class="dropdown"><button class="btn btn-outline-danger dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-lock"></i> Bloquear / activar</button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><button class="dropdown-item text-danger" data-masivo="BLOQUEADA"><i class="bi bi-lock-fill"></i> Bloquear a todas las de la lista</button></li>
+            <li><button class="dropdown-item text-success" data-masivo="ACTIVA"><i class="bi bi-unlock-fill"></i> Activar a todas las de la lista</button></li>
+            <li><span class="dropdown-item-text small text-secondary">Use los filtros (curso, rol...) para<br>aplicarlo solo a un grupo.</span></li>
+          </ul></div>
       </div>
     </div>
     <form class="card p-3 mb-3" id="filtros"><div class="row g-2">
@@ -208,6 +230,20 @@ async function vistaPersonas() {
   qs('#btnNueva').addEventListener('click', () => formPersona());
   qs('#btnImportar').addEventListener('click', importarPersonas);
   const form = qs('#filtros');
+  C.querySelectorAll('[data-masivo]').forEach((b) => b.addEventListener('click', async () => {
+    const estado = b.dataset.masivo;
+    const filtros = Object.fromEntries([...new FormData(form).entries()].filter(([k, v]) => v && k !== 'estado'));
+    const grupo = Object.keys(filtros).length ? 'las personas que coinciden con los filtros actuales' : 'TODAS las personas registradas';
+    const texto = estado === 'BLOQUEADA'
+      ? `¿Bloquear a ${grupo}?\n\nLos vendedores no podrán cobrarles hasta que las active de nuevo. El saldo no cambia.`
+      : `¿Activar a ${grupo}?`;
+    if (!confirm(texto)) return;
+    try {
+      const r = await api('/api/admin/personas-estado', { method: 'PUT', body: { estado, filtros } });
+      aviso(`${r.cambiadas} cuentas ${estado === 'BLOQUEADA' ? 'bloqueadas' : 'activadas'}.`, estado === 'BLOQUEADA' ? 'warning' : 'success');
+      aplicar();
+    } catch (ex) { aviso(ex.message, 'danger'); }
+  }));
   let t;
   const aplicar = () => {
     const q = new URLSearchParams([...new FormData(form).entries()].filter(([, v]) => v));
@@ -371,7 +407,7 @@ function leerCSV(texto) {
 const normal = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
 
 function importarPersonas() {
-  const plantilla = '\ufeffnombre;tipo;curso;identificacion;saldo\nJuan Pérez;ESTUDIANTE;10A;1001;25000\nMarta Herrera;DOCENTE;;CC52000111;40000\n';
+  const plantilla = '\ufeffnombre;tipo;curso;identificacion;saldo\nJuan Pérez;ESTUDIANTE;10;1001;25000\nMarta Herrera;DOCENTE;;CC52000111;40000\n';
   const url = URL.createObjectURL(new Blob([plantilla], { type: 'text/csv;charset=utf-8' }));
   let filas = [];
   const cuerpo = modal({
@@ -811,6 +847,130 @@ async function vistaReportes() {
   }));
 }
 
+// ===================================================================== MÉTRICAS E HISTORIAL
+const TIPO_ACT = {
+  VENTA: ['Venta', 'success'], ANULACION: ['Anulación', 'danger'], CARGA: ['Carga de saldo', 'primary'],
+  ADMIN: ['Administración', 'secondary'], SESION: ['Ingreso', 'info'],
+};
+
+/** Columnas de ventas por hora (una sola serie; el detalle aparece al pasar el cursor o tocar). */
+function columnasHora(filas) {
+  if (!filas.length) return '<p class="text-secondary mb-0">Todavía no hay ventas en este rango.</p>';
+  const porHora = Object.fromEntries(filas.map((f) => [f.hora, f]));
+  const desde = Math.min(7, ...filas.map((f) => f.hora));
+  const hasta = Math.max(17, ...filas.map((f) => f.hora));
+  const max = Math.max(1, ...filas.map((f) => Number(f.total)));
+  const horas = [];
+  for (let h = desde; h <= hasta; h++) horas.push(h);
+  const etiquetaHora = (h) => `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`;
+  return `<div class="columnas" role="img" aria-label="Ventas por hora">
+    ${horas.map((h) => {
+      const f = porHora[h];
+      const txt = f ? `${etiquetaHora(h)}.m.: ${pesos(f.total)} en ${f.cantidad} ventas` : `${etiquetaHora(h)}.m.: sin ventas`;
+      return `<div class="col-hora" title="${txt}" tabindex="0" data-txt="${txt}">
+        <div class="col-barra-zona"><div class="col-barra" style="height:${f ? Math.max(2, (Number(f.total) / max) * 100) : 0}%"></div></div>
+        <div class="col-eti">${etiquetaHora(h)}</div></div>`;
+    }).join('')}</div>
+    <div class="small text-secondary mt-1" id="detalleHora">Pase el cursor o toque una barra para ver el detalle.</div>`;
+}
+
+async function vistaMetricas() {
+  const p = params();
+  const usuarios = (await api('/api/admin/metricas?' + new URLSearchParams([['desde', '2100-01-01']]))).por_usuario;
+  C.innerHTML = `
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+      <h1 class="h3 fw-bold mb-0">Métricas e historial</h1>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary" id="mActualizar"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+        <button class="btn btn-outline-success" data-exportar="xlsx"><i class="bi bi-file-earmark-excel"></i> Historial en Excel</button>
+        <button class="btn btn-outline-secondary" data-exportar="csv"><i class="bi bi-filetype-csv"></i> CSV</button>
+      </div>
+    </div>
+    <form class="card p-3 mb-3" id="mFiltros"><div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2"><label class="form-label small">Desde</label><input type="date" class="form-control" name="desde" value="${esc(p.get('desde') || '')}"></div>
+      <div class="col-6 col-md-2"><label class="form-label small">Hasta</label><input type="date" class="form-control" name="hasta" value="${esc(p.get('hasta') || '')}"></div>
+      <div class="col-md-3"><label class="form-label small">Quién</label><select class="form-select" name="usuario_id"><option value="">Todos los usuarios</option>
+        <optgroup label="Administradores">${usuarios.filter((u) => u.rol === 'ADMIN').map((u) => `<option value="${u.id}" ${p.get('usuario_id') === String(u.id) ? 'selected' : ''}>${esc(u.nombre)} (${esc(u.usuario)})</option>`).join('')}</optgroup>
+        <optgroup label="Vendedores">${usuarios.filter((u) => u.rol === 'VENDEDOR').map((u) => `<option value="${u.id}" ${p.get('usuario_id') === String(u.id) ? 'selected' : ''}>${esc(u.emprendimiento || u.nombre)} (${esc(u.usuario)})</option>`).join('')}</optgroup></select></div>
+      <div class="col-6 col-md-2"><label class="form-label small">Tipo</label><select class="form-select" name="tipo"><option value="">Toda la actividad</option>
+        ${Object.entries(TIPO_ACT).map(([k, [t]]) => `<option value="${k}" ${p.get('tipo') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="col-6 col-md-3"><label class="form-label small">Buscar</label><input class="form-control" name="q" placeholder="Persona, puesto o detalle" value="${esc(p.get('q') || '')}"></div>
+    </div><div class="small text-secondary mt-2">Las fechas filtran también las métricas. Sin fechas se ve toda la feria.</div></form>
+    <div id="mResumen"><div class="p-4 text-center text-secondary"><div class="spinner-border"></div></div></div>
+    <div class="card mb-3"><div class="p-3 pb-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <h2 class="h5 fw-bold mb-0">Historial de actividad: quién hizo qué y cuándo</h2><span class="small text-secondary" id="mCuenta"></span></div>
+      <div id="mHistorial"></div></div>`;
+  const form = qs('#mFiltros');
+  let limite = 300;
+  const filtros = () => new URLSearchParams([...new FormData(form).entries()].filter(([, v]) => v));
+  const cargar = async () => {
+    const f = filtros();
+    history.replaceState(null, '', '#metricas' + (f.toString() ? '?' + f : ''));
+    const fm = new URLSearchParams([...f].filter(([k]) => ['desde', 'hasta'].includes(k)));
+    const [m, h] = await Promise.all([api('/api/admin/metricas?' + fm), api(`/api/admin/historial?${f}&limite=${limite}`)]);
+    if (!qs('#mResumen')) return; // el usuario cambió de pantalla
+    const r = m.resumen;
+    const uid = f.get('usuario_id');
+    const personasUsr = uid ? m.por_usuario.filter((u) => String(u.id) === uid) : m.por_usuario;
+    qs('#mResumen').innerHTML = `
+      <div class="row g-3 mb-3">
+        ${tile('bi-cart-check', 'Ventas', r.ventas.toLocaleString('es-CO'), 'success')}
+        ${tile('bi-cash-stack', 'Total vendido', pesos(r.total_ventas), 'success')}
+        ${tile('bi-receipt', 'Compra promedio', pesos(r.ticket_promedio), 'primary')}
+        ${tile('bi-people', 'Compradores distintos', r.compradores.toLocaleString('es-CO'), 'primary')}
+        ${tile('bi-wallet2', 'Saldo cargado', `${pesos(r.total_cargado)}<div class="sub">${r.cargas} cargas</div>`, 'primary')}
+        ${tile('bi-person-plus', 'Personas registradas', r.personas_registradas.toLocaleString('es-CO'), 'secondary')}
+        ${tile('bi-shop', 'Puestos con ventas', r.emprendimientos_con_ventas, 'secondary')}
+        ${tile('bi-x-octagon', 'Anulaciones', `${r.anuladas}<div class="sub">${pesos(r.total_anulado)}</div>`, 'danger')}
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-lg-7"><div class="card p-3 h-100"><h2 class="h6 fw-bold">Ventas por hora (valor vendido)</h2>${columnasHora(m.por_hora)}</div></div>
+        <div class="col-lg-5"><div class="card p-3 h-100"><h2 class="h6 fw-bold">Ventas por día</h2>${tablaBarras(m.por_dia, 'Día')}</div></div>
+        <div class="col-lg-6"><div class="card p-3 h-100"><h2 class="h6 fw-bold">Emprendimientos que más venden</h2>${tablaBarras(m.top_emprendimientos, 'Emprendimiento', (x) => `<div class="small text-secondary">${x.compradores} compradores</div>`)}</div></div>
+        <div class="col-lg-6"><div class="card p-3 h-100"><h2 class="h6 fw-bold">Personas que más compran</h2>${tablaBarras(m.top_compradores, 'Persona', (x) => `<div class="small text-secondary">${esc(TIPOS[x.curso] || x.curso)}</div>`)}</div></div>
+      </div>
+      <div class="card mb-3"><div class="p-3 pb-2"><h2 class="h5 fw-bold mb-0">Actividad por usuario</h2>
+        <div class="small text-secondary">Toque una fila para ver solo el historial de ese usuario.</div></div>
+        <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+        <thead><tr><th>Usuario</th><th>Rol</th><th class="num">Ventas</th><th class="num">Vendido</th><th class="num">Cargas</th><th class="num">Cargado</th>
+          <th class="num">Anulaciones</th><th class="num">Otras operaciones</th><th class="num">Ingresos</th><th class="num">Fallidos</th><th>Último ingreso</th></tr></thead>
+        <tbody>${personasUsr.map((u) => `<tr class="fila-usuario ${u.activo ? '' : 'text-secondary'}" data-usuario="${u.id}" style="cursor:pointer">
+          <td><div class="fw-semibold">${esc(u.rol === 'VENDEDOR' ? (u.emprendimiento || u.nombre) : u.nombre)}</div><code class="small">${esc(u.usuario)}</code></td>
+          <td>${u.rol === 'ADMIN' ? 'Administrador' : 'Vendedor'}</td>
+          <td class="num">${u.ventas || ''}</td><td class="num">${u.total_ventas ? pesos(u.total_ventas) : ''}</td>
+          <td class="num">${u.cargas || ''}</td><td class="num">${u.total_cargas ? pesos(u.total_cargas) : ''}</td>
+          <td class="num">${u.anulaciones || ''}</td><td class="num">${u.operaciones || ''}</td><td class="num">${u.ingresos || ''}</td>
+          <td class="num ${u.fallidos ? 'text-danger fw-semibold' : ''}">${u.fallidos || ''}</td>
+          <td class="small text-nowrap">${fechaHora(u.ultimo_acceso) || 'Nunca'}</td></tr>`).join('')}</tbody></table></div></div>`;
+    qs('#mResumen').querySelectorAll('.col-hora').forEach((b) => {
+      const mostrar = () => { qs('#detalleHora').textContent = b.dataset.txt; };
+      b.addEventListener('mouseenter', mostrar); b.addEventListener('focus', mostrar); b.addEventListener('click', mostrar);
+    });
+    qs('#mResumen').querySelectorAll('[data-usuario]').forEach((tr) => tr.addEventListener('click', () => {
+      form.usuario_id.value = tr.dataset.usuario; limite = 300; cargar();
+      qs('#mHistorial').scrollIntoView({ behavior: 'smooth' });
+    }));
+    qs('#mCuenta').textContent = h.length >= limite ? `Mostrando los ${h.length} más recientes` : `${h.length} registros`;
+    qs('#mHistorial').innerHTML = h.length ? `<div class="table-responsive" style="max-height:75vh"><table class="table table-sm table-striped align-middle mb-0 small">
+      <thead class="sticky-top bg-white"><tr><th>Fecha y hora</th><th>Quién</th><th>Tipo</th><th>Qué hizo</th><th class="num">Valor</th></tr></thead>
+      <tbody>${h.map((x) => `<tr><td class="text-nowrap">${fechaHora(x.fecha_hora)}</td>
+        <td>${esc(x.usuario || '')}${x.rol ? `<div class="text-secondary">${x.rol === 'ADMIN' ? 'Administrador' : 'Vendedor'}</div>` : ''}</td>
+        <td><span class="badge text-bg-${(TIPO_ACT[x.tipo] || ['', 'secondary'])[1]}">${esc(x.tipo_texto || x.tipo)}</span></td>
+        <td class="text-break" style="min-width:220px">${esc(x.descripcion)}</td><td class="num">${x.valor === null ? '' : pesos(x.valor)}</td></tr>`).join('')}</tbody></table></div>
+      ${h.length >= limite ? '<div class="p-2 text-center"><button class="btn btn-sm btn-outline-primary" id="mMas">Ver más</button></div>' : ''}`
+      : '<p class="p-3 text-secondary mb-0">No hay actividad con estos filtros.</p>';
+    qs('#mMas')?.addEventListener('click', () => { limite += 500; cargar(); });
+  };
+  let t;
+  form.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { limite = 300; cargar().catch((e) => aviso(e.message, 'danger')); }, 350); });
+  form.addEventListener('submit', (e) => e.preventDefault());
+  qs('#mActualizar').addEventListener('click', () => cargar().catch((e) => aviso(e.message, 'danger')));
+  C.querySelectorAll('[data-exportar]').forEach((b) => b.addEventListener('click', () => {
+    location.href = `/api/admin/reportes/historial?formato=${b.dataset.exportar}&${filtros()}`;
+  }));
+  await cargar();
+}
+
 // ===================================================================== CONFIGURACIÓN
 async function vistaConfig() {
   const [cfg, admins, auditoria] = await Promise.all([api('/api/admin/config'), api('/api/admin/administradores'), api('/api/admin/auditoria')]);
@@ -837,7 +997,8 @@ async function vistaConfig() {
           <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Guardar configuración</button>
         </form></div></div>
       <div class="col-lg-6"><div class="card p-3 h-100"><h2 class="h5 fw-bold">Cursos / grados</h2>
-        <form class="input-group mb-3" id="formCurso"><input class="form-control" name="nombre" placeholder="Ej.: 10A" maxlength="30"><button class="btn btn-primary"><i class="bi bi-plus-lg"></i> Agregar</button></form>
+        <form class="input-group mb-2" id="formCurso"><input class="form-control" name="nombre" placeholder="Ej.: 8A" maxlength="30"><button class="btn btn-primary"><i class="bi bi-plus-lg"></i> Agregar</button></form>
+        <button class="btn btn-sm btn-outline-primary mb-3 align-self-start" id="btnCursosColegio"><i class="bi bi-list-check"></i> Cargar cursos del colegio (Jardín a 11)</button>
         <div style="max-height:360px;overflow:auto"><table class="table table-sm align-middle mb-0"><thead><tr><th>Curso</th><th class="num">Personas</th><th class="num">Emprend.</th><th></th></tr></thead>
         <tbody>${S.cursos.map((c) => `<tr><td class="fw-semibold">${esc(c.nombre)}</td><td class="num">${c.personas}</td><td class="num">${c.emprendimientos}</td>
           <td class="text-end"><button class="btn btn-sm btn-outline-secondary" data-renombrar="${c.id}" data-nombre="${esc(c.nombre)}"><i class="bi bi-pencil"></i></button>
@@ -867,6 +1028,13 @@ async function vistaConfig() {
   qs('#formCurso').addEventListener('submit', async (e) => {
     e.preventDefault();
     try { await api('/api/admin/cursos', { method: 'POST', body: { nombre: e.target.nombre.value } }); aviso('Curso agregado.'); navegar(); } catch (ex) { aviso(ex.message, 'danger'); }
+  });
+  qs('#btnCursosColegio').addEventListener('click', async () => {
+    try {
+      const r = await api('/api/admin/cursos/colegio', { method: 'POST' });
+      aviso(r.agregados.length ? `Cursos agregados: ${r.agregados.join(', ')}` : 'Los cursos del colegio ya estaban creados.', r.agregados.length ? 'success' : 'info');
+      navegar();
+    } catch (ex) { aviso(ex.message, 'danger'); }
   });
   C.querySelectorAll('[data-renombrar]').forEach((b) => b.addEventListener('click', () => modal({
     titulo: 'Renombrar curso', cuerpo: `<form><input class="form-control" name="nombre" value="${b.dataset.nombre}"></form>`,

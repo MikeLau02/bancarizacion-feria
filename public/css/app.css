@@ -58,3 +58,13 @@ body { background: var(--feria-fondo); }
   .tile .valor { font-size: 1.2rem; }
   .tile .icono { display: none; }
 }
+
+/* Ventas por hora: columnas de una sola serie */
+.columnas { display: flex; align-items: stretch; gap: 2px; height: 180px; border-bottom: 1px solid #cfd6df; }
+.col-hora { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; outline: none; }
+.col-barra-zona { flex: 1; display: flex; align-items: flex-end; justify-content: center; }
+.col-barra { width: 70%; max-width: 28px; background: var(--barra); border-radius: 4px 4px 0 0; }
+.col-hora:hover .col-barra, .col-hora:focus .col-barra { filter: brightness(.85); }
+.col-hora:hover, .col-hora:focus { background: rgba(59, 130, 246, .06); }
+.col-eti { text-align: center; font-size: .7rem; color: #5b6472; padding-top: 2px; white-space: nowrap; }
+.tile .valor .sub { font-size: .8rem; font-weight: 400; color: #5b6472; }

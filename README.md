@@ -134,7 +134,8 @@ PDF de QR y cuadre contable. No toca la base real.
 
 1. **Configuración** → escriba las fechas del **día 1** y **día 2**, el valor de **saldo bajo** (p. ej. $5.000),
    deje activo **"Separar el saldo por día"** y el porcentaje de la primera carga para el día 1 (50 %).
-   Cree los **cursos** (6A, 10A, 11B...).
+   Los **cursos** del colegio ya vienen creados: Jardín, Transición, 1° a 7°, 8A, 8B, 9°, 10°, 11A y 11B
+   (si faltan, use **Cargar cursos del colegio**). Al importar, "9", "9°" o "8 a" se reconocen como el curso correcto.
 2. **Personas** → **Nueva persona** (o **Importar Excel/CSV**: sube directamente el archivo `.xlsx` de Excel o un `.csv` con columnas
    `nombre, tipo, curso, identificacion, saldo`; hay plantillas para descargar). El rol puede ser estudiante, docente, directivo, administrativo,
    familia u otro. El saldo inicial se divide solo: mitad para el día 1 y mitad reservada para el día 2.
@@ -186,6 +187,14 @@ cargas de saldo. No necesita usuario ni contraseña: el código del QR es secret
 - **Recargar saldo**: detalle de la persona → **Recargar saldo**. **Ajustar** permite sumar o restar con motivo
   (nunca deja el saldo negativo). Cada movimiento guarda valor, saldo anterior, nuevo saldo, fecha, hora y administrador.
 - **Bloquear / activar** una cuenta, y **QR nuevo** si una tarjeta se perdió (el QR anterior deja de funcionar).
+
+### Métricas e historial (administrador)
+
+Menú **Métricas**: ventas, total vendido, compra promedio, compradores distintos, saldo cargado y anulaciones; ventas por
+hora y por día; los emprendimientos que más venden y las personas que más compran; y la **actividad por usuario**
+(ventas, cargas, anulaciones, otras operaciones, ingresos e intentos fallidos de cada administrador y vendedor).
+Debajo está el **historial**: quién hizo qué y cuándo (ventas, anulaciones, cargas de saldo, cambios administrativos,
+ingresos y cierres de sesión), con filtros por fechas, usuario, tipo y texto, y descarga en Excel o CSV.
 
 ### Reportes (Excel y CSV)
 
@@ -286,7 +295,7 @@ feria-qr/
 
 | Tabla | Contenido |
 |---|---|
-| `cursos` | Cursos/grados (10A, 11B…) |
+| `cursos` | Cursos/grados (Jardín, Transición, 1° a 11°, 8A, 8B, 11A, 11B) |
 | `estudiantes` | Personas con saldo (estudiantes, docentes, etc.): nombre, rol, curso, identificación, saldo inicial, saldo total, saldo del día 1, saldo del día 2, estado, `qr_token` único |
 | `emprendimientos` | Nombre, curso o rol, categoría, productos, activo |
 | `emprendimiento_responsables` | Personas registradas responsables de cada emprendimiento |

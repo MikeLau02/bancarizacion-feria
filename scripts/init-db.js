@@ -29,6 +29,13 @@ const { ahora } = require('../src/utils');
   await conn.query(sql);
   console.log(`✔ Tablas creadas/verificadas en la base "${database}".`);
 
+  // La primera vez se cargan los cursos del colegio (Jardín a 11)
+  const [[{ n: nCursos }]] = await conn.query('SELECT COUNT(*) AS n FROM cursos');
+  if (nCursos === 0 && !process.argv.includes('--sin-cursos')) {
+    const agregados = await require('../src/services/cursos').crearCursosColegio(conn, ahora());
+    console.log(`✔ Cursos creados: ${agregados.join(', ')}`);
+  }
+
   const restablecer = process.env.ADMIN_RESTABLECER === '1' || process.argv.includes('--restablecer-admin');
   const [admins] = await conn.query("SELECT COUNT(*) AS n FROM usuarios WHERE rol = 'ADMIN'");
   if (restablecer) {

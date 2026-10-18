@@ -12,13 +12,13 @@ const NOMBRES = ['Juan', 'María', 'Santiago', 'Valentina', 'Samuel', 'Isabella'
   'Tomás', 'Gabriela', 'Emiliano', 'Luciana', 'Sebastián', 'Salomé', 'Daniel', 'Antonella', 'Martín', 'Sara'];
 const APELLIDOS = ['Pérez', 'Gómez', 'Rodríguez', 'López', 'Martínez', 'García', 'Hernández', 'Torres', 'Ramírez', 'Castro',
   'Vargas', 'Moreno', 'Rojas', 'Díaz', 'Ortiz', 'Suárez'];
-const CURSOS = ['6A', '7A', '8A', '9A', '10A', '10B', '11A', '11B'];
+const CURSOS = ['6°', '7°', '8A', '8B', '9°', '10°', '11A', '11B'];
 const EMPRENDIMIENTOS = [
-  ['Dulces 10A', 'Laura Gómez, Andrés Ruiz', '10A', 'Dulces', 'Brownies, galletas, cupcakes', 'dulces10a'],
+  ['Dulces 10°', 'Laura Gómez, Andrés Ruiz', '10°', 'Dulces', 'Brownies, galletas, cupcakes', 'dulces10a'],
   ['Comidas 11B', 'Camilo Rojas, Sara Díaz', '11B', 'Comidas', 'Empanadas, arepas, perros calientes', 'comidas11b'],
-  ['Jugos Naturales 9A', 'Felipe Castro, Ana Ortiz', '9A', 'Bebidas', 'Jugos, limonadas, malteadas', 'jugos9a'],
+  ['Jugos Naturales 9°', 'Felipe Castro, Ana Ortiz', '9°', 'Bebidas', 'Jugos, limonadas, malteadas', 'jugos9a'],
   ['Artesanías 8A', 'Paula Vargas', '8A', 'Artesanías', 'Manillas, llaveros, separadores', 'artesanias8a'],
-  ['Juegos 7A', 'Mateo Suárez, Lucía Moreno', '7A', 'Entretenimiento', 'Tiro al blanco, lotería', 'juegos7a'],
+  ['Juegos 7°', 'Mateo Suárez, Lucía Moreno', '7°', 'Entretenimiento', 'Tiro al blanco, lotería', 'juegos7a'],
 ];
 
 (async () => {
@@ -41,7 +41,7 @@ const EMPRENDIMIENTOS = [
        VALUES (?,?,?,?,?,0,?,?,?)`, [tipo, nombre, curso ? cursoId[curso] : null, String(1000 + k), saldo, nuevoTokenQR(), fecha, fecha]);
     await saldos.moverSaldo(conn, { estudianteId: r.insertId, adminId: admin.id, tipo: 'INICIAL', valor: saldo, dia: 'AMBOS', observacion: 'Saldo inicial asignado' });
   });
-  await persona('ESTUDIANTE', 'Juan Pérez', '10A', 25000);
+  await persona('ESTUDIANTE', 'Juan Pérez', '10°', 25000);
   for (const c of CURSOS) {
     for (let i = 0; i < 5; i++) {
       const nom = `${NOMBRES[(k * 7 + i) % NOMBRES.length]} ${APELLIDOS[(k * 3 + i) % APELLIDOS.length]} ${APELLIDOS[(k + i * 5) % APELLIDOS.length]}`;

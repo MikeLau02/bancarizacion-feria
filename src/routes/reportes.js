@@ -21,7 +21,17 @@ function rangoFechas(qs, campo) {
 }
 
 const D = 'dinero';
+const ROLES = { ADMIN: 'Administrador', VENDEDOR: 'Vendedor' };
 const REPORTES = {
+  historial: {
+    titulo: 'Historial de actividad',
+    columnas: [['fecha_hora', 'Fecha y hora'], ['usuario', 'Quién'], ['rol_texto', 'Rol'], ['tipo_texto', 'Tipo'],
+      ['descripcion', 'Qué hizo'], ['valor', 'Valor', D]],
+    async datos(qs) {
+      const filas = await require('../services/historial').historial(qs, 20000);
+      return filas.map((h) => ({ ...h, rol_texto: ROLES[h.rol] || '' }));
+    },
+  },
   estudiantes: {
     titulo: 'Listado de personas y saldo',
     columnas: [

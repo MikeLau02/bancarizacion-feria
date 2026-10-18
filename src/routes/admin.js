@@ -6,11 +6,13 @@ const QRCode = require('qrcode');
 const archiver = require('archiver');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
-const { query, transaccion } = require('../db');
+const { query, transaccion, pool } = require('../db');
 const { asyncH, ErrorApp, ahora, hoy, aEntero, texto, nuevoTokenQR } = require('../utils');
 const { obtenerConfig, normalizar } = require('../services/configuracion');
 const { auditar } = require('../services/auditoria');
 const saldos = require('../services/saldos');
+const cursosSrv = require('../services/cursos');
+const historialSrv = require('../services/historial');
 
 const router = express.Router();
 const TIPOS = ['ESTUDIANTE', 'DOCENTE', 'DIRECTIVO', 'ADMINISTRATIVO', 'FAMILIA', 'OTRO'];
@@ -101,24 +103,43 @@ router.get('/buscar', asyncH(async (req, res) => {
 // Cursos
 // =====================================================================
 router.get('/cursos', asyncH(async (req, res) => {
-  res.json(await query(
+  const filas = await query(
     `SELECT c.id, c.nombre, c.activo,
        (SELECT COUNT(*) FROM estudiantes e WHERE e.curso_id = c.id) AS personas,
        (SELECT COUNT(*) FROM emprendimientos m WHERE m.curso_id = c.id) AS emprendimientos
-     FROM cursos c ORDER BY c.nombre`));
+     FROM cursos c`);
+  res.json(filas.sort((a, b) => cursosSrv.compararCursos(a.nombre, b.nombre)));
 }));
 
-router.post('/cursos', asyncH(async (req, res) => {
-  const nombre = texto(req.body.nombre, 30).toUpperCase();
+const nombreCurso = (v) => {
+  const nombre = texto(v, 30).toUpperCase();
   if (!nombre) throw new ErrorApp(400, 'Escriba el nombre del curso.');
+  return nombre;
+};
+
+router.post('/cursos', asyncH(async (req, res) => {
+  const nombre = nombreCurso(req.body.nombre);
+  const existe = await cursosSrv.buscarCurso(pool, nombre);
+  if (existe) throw new ErrorApp(409, `Ya existe el curso ${existe.nombre}.`);
   const r = await query('INSERT INTO cursos (nombre, creado_en) VALUES (?,?)', [nombre, ahora()]);
   res.status(201).json({ id: r.insertId, nombre });
 }));
 
+// Carga los cursos del colegio (Jardín a 11, con 8A, 8B, 11A y 11B) que todavía no existan
+router.post('/cursos/colegio', asyncH(async (req, res) => {
+  const agregados = await transaccion((conn) => cursosSrv.crearCursosColegio(conn, ahora()));
+  await auditar(null, req.usuario.id, 'CARGAR_CURSOS', 'cursos', null, agregados.join(', ') || 'Ya estaban todos');
+  res.json({ agregados });
+}));
+
 router.put('/cursos/:id', asyncH(async (req, res) => {
-  const nombre = texto(req.body.nombre, 30).toUpperCase();
-  if (!nombre) throw new ErrorApp(400, 'Escriba el nombre del curso.');
-  await query('UPDATE cursos SET nombre = ? WHERE id = ?', [nombre, idParam(req)]);
+  const nombre = nombreCurso(req.body.nombre);
+  try {
+    await query('UPDATE cursos SET nombre = ? WHERE id = ?', [nombre, idParam(req)]);
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') throw new ErrorApp(409, `Ya existe el curso ${nombre}.`);
+    throw err;
+  }
   res.json({ ok: true });
 }));
 
@@ -132,13 +153,14 @@ router.delete('/cursos/:id', asyncH(async (req, res) => {
 
 async function cursoId(conn, valor, crear = false) {
   if (valor === undefined || valor === null || valor === '') return null;
-  if (/^\d+$/.test(String(valor))) {
+  // Desde los formularios llega el id del curso; desde Excel/CSV llega el nombre ("9" es el curso 9°, no el id 9)
+  if (!crear && /^\d+$/.test(String(valor))) {
     const [[c]] = await conn.query('SELECT id FROM cursos WHERE id = ?', [valor]);
     if (!c) throw new ErrorApp(400, 'El curso seleccionado no existe.');
     return c.id;
   }
   const nombre = texto(valor, 30).toUpperCase();
-  const [[c]] = await conn.query('SELECT id FROM cursos WHERE nombre = ?', [nombre]);
+  const c = await cursosSrv.buscarCurso(conn, nombre);
   if (c) return c.id;
   if (!crear) throw new ErrorApp(400, `El curso ${nombre} no existe.`);
   const [r] = await conn.query('INSERT INTO cursos (nombre, creado_en) VALUES (?,?)', [nombre, ahora()]);
@@ -148,17 +170,23 @@ async function cursoId(conn, valor, crear = false) {
 // =====================================================================
 // Personas (tabla "estudiantes")
 // =====================================================================
-router.get('/personas', asyncH(async (req, res) => {
-  const cfg = await obtenerConfig();
+// Filtros de la lista de personas (también los usa el bloqueo masivo)
+function filtrosPersonas(f, cfg) {
   const cond = [];
   const p = [];
-  const q = texto(req.query.q, 80);
+  const q = texto(f.q, 80);
   if (q) { cond.push('(e.nombre_completo LIKE ? OR e.identificacion LIKE ? OR c.nombre = ?)'); p.push(`%${q}%`, `%${q}%`, q); }
-  if (req.query.curso_id) { cond.push('e.curso_id = ?'); p.push(parseInt(req.query.curso_id, 10)); }
-  if (TIPOS.includes(req.query.tipo)) { cond.push('e.tipo = ?'); p.push(req.query.tipo); }
-  if (['ACTIVA', 'BLOQUEADA'].includes(req.query.estado)) { cond.push('e.estado = ?'); p.push(req.query.estado); }
-  if (req.query.saldo === 'agotado') cond.push('e.saldo = 0');
-  if (req.query.saldo === 'bajo') { cond.push('e.saldo > 0 AND e.saldo < ?'); p.push(cfg.saldo_bajo); }
+  if (f.curso_id) { cond.push('e.curso_id = ?'); p.push(parseInt(f.curso_id, 10)); }
+  if (TIPOS.includes(f.tipo)) { cond.push('e.tipo = ?'); p.push(f.tipo); }
+  if (['ACTIVA', 'BLOQUEADA'].includes(f.estado)) { cond.push('e.estado = ?'); p.push(f.estado); }
+  if (f.saldo === 'agotado') cond.push('e.saldo = 0');
+  if (f.saldo === 'bajo') { cond.push('e.saldo > 0 AND e.saldo < ?'); p.push(cfg.saldo_bajo); }
+  return { cond, p };
+}
+
+router.get('/personas', asyncH(async (req, res) => {
+  const cfg = await obtenerConfig();
+  const { cond, p } = filtrosPersonas(req.query, cfg);
   const filas = await query(
     `SELECT e.id, e.tipo, e.nombre_completo, e.identificacion, e.curso_id, c.nombre AS curso, e.saldo_inicial, e.saldo, e.saldo_dia1, e.saldo_dia2,
        e.estado, e.creado_en,
@@ -168,6 +196,21 @@ router.get('/personas', asyncH(async (req, res) => {
      ${cond.length ? 'WHERE ' + cond.join(' AND ') : ''}
      ORDER BY c.nombre IS NULL, c.nombre, e.nombre_completo LIMIT 5000`, p);
   res.json({ saldo_bajo: cfg.saldo_bajo, personas: filas });
+}));
+
+// Bloquea o activa de una vez a todas las personas que cumplen los filtros (sin filtros: a todas)
+router.put('/personas-estado', asyncH(async (req, res) => {
+  const estado = req.body.estado === 'BLOQUEADA' ? 'BLOQUEADA' : req.body.estado === 'ACTIVA' ? 'ACTIVA' : null;
+  if (!estado) throw new ErrorApp(400, 'Indique si quiere bloquear o activar.');
+  const { estado: _ignorado, ...filtros } = req.body.filtros || {};
+  const { cond, p } = filtrosPersonas(filtros, await obtenerConfig());
+  cond.push('e.estado <> ?');
+  const r = await query(
+    `UPDATE estudiantes e LEFT JOIN cursos c ON c.id = e.curso_id SET e.estado = ?, e.actualizado_en = ? WHERE ${cond.join(' AND ')}`,
+    [estado, ahora(), ...p, estado]);
+  await auditar(null, req.usuario.id, estado === 'BLOQUEADA' ? 'BLOQUEO_MASIVO' : 'ACTIVACION_MASIVA', 'estudiantes', null,
+    { cambiadas: r.affectedRows, filtros });
+  res.json({ cambiadas: r.affectedRows, estado });
 }));
 
 router.get('/personas/:id', asyncH(async (req, res) => {
@@ -280,7 +323,7 @@ router.get('/plantilla-personas.xlsx', asyncH(async (req, res) => {
     { header: 'nombre', width: 32 }, { header: 'tipo', width: 16 }, { header: 'curso', width: 10 },
     { header: 'identificacion', width: 18 }, { header: 'saldo', width: 12 },
   ];
-  hoja.addRow(['Juan Pérez', 'ESTUDIANTE', '10A', '1001', 25000]);
+  hoja.addRow(['Juan Pérez', 'ESTUDIANTE', '10', '1001', 25000]);
   hoja.addRow(['Marta Herrera', 'DOCENTE', '', 'CC52000111', 40000]);
   hoja.getRow(1).font = { bold: true };
   hoja.getColumn(4).numFmt = '@';
@@ -637,6 +680,13 @@ router.get('/auditoria', asyncH(async (req, res) => {
   res.json(await query(
     `SELECT a.id, a.fecha_hora, a.accion, a.entidad, a.entidad_id, a.detalle, u.nombre AS usuario
      FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id ORDER BY a.id DESC LIMIT 1000`));
+}));
+
+// Métricas e historial de actividad (quién hizo qué y cuándo)
+router.get('/metricas', asyncH(async (req, res) => res.json(await historialSrv.metricas(req.query))));
+router.get('/historial', asyncH(async (req, res) => {
+  const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 300, 1), 2000);
+  res.json(await historialSrv.historial(req.query, limite));
 }));
 
 // =====================================================================

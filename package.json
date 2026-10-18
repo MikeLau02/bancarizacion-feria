@@ -23,6 +23,7 @@
     "bcryptjs": "^3.0.3",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
+    "compression": "^1.8.1",
     "dotenv": "^16.6.1",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",

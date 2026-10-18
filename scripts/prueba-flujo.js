@@ -72,7 +72,7 @@ function cliente(base) {
 
     // ---------- registro de persona y QR
     const cursos = (await admin('GET', '/api/admin/cursos')).datos;
-    const c10a = cursos.find((x) => x.nombre === '10A').id;
+    const c10a = cursos.find((x) => x.nombre === '10°').id;
     const nueva = await admin('POST', '/api/admin/personas', { tipo: 'ESTUDIANTE', nombre_completo: 'Ana Prueba', curso_id: c10a, identificacion: 'T-1', saldo_inicial: '25.000' });
     assert.equal(nueva.status, 201);
     const dup = await admin('POST', '/api/admin/personas', { tipo: 'ESTUDIANTE', nombre_completo: 'Otra', curso_id: c10a, identificacion: 'T-1', saldo_inicial: 0 });
@@ -87,13 +87,13 @@ function cliente(base) {
     assert.equal(png.status, 200);
     assert.equal(png.tipo, 'image/png');
     paso('persona registrada con $25.000 divididos automáticamente: $12.500 día 1 y $12.500 día 2; QR único');
-    const qr = `FERIAQR:${est.qr_token}|Ana Prueba|10A`;
+    const qr = `FERIAQR:${est.qr_token}|Ana Prueba|10°`;
 
     // ---------- consulta del vendedor: datos mínimos
     const cons = await vend('POST', '/api/ventas/consultar', { qr });
     assert.equal(cons.status, 200);
     assert.equal(cons.datos.nombre, 'Ana Prueba');
-    assert.equal(cons.datos.curso, '10A');
+    assert.equal(cons.datos.curso, '10°');
     assert.equal(cons.datos.saldo, 25000);
     assert.equal(cons.datos.identificacion, undefined);
     paso('el vendedor ve nombre, curso y saldo (sin identificación)');
@@ -129,7 +129,7 @@ function cliente(base) {
     // ---------- historial
     const hist = (await admin('GET', `/api/admin/personas/${id}`)).datos;
     assert.deepEqual(hist.compras.map((t) => [t.emprendimiento, t.valor, t.saldo_posterior]),
-      [['Dulces 10A', 5000, 20000], ['Comidas 11B', 8000, 12000], ['Dulces 10A', 12000, 0]]);
+      [['Dulces 10°', 5000, 20000], ['Comidas 11B', 8000, 12000], ['Dulces 10°', 12000, 0]]);
     const mis = (await vend('GET', '/api/ventas/mis-ventas')).datos;
     assert.equal(mis.ventas.length, 2);
     assert.ok(mis.ventas.every((v) => v.comprador === 'Ana Prueba'));
@@ -294,6 +294,60 @@ function cliente(base) {
     const [p6c] = await query("SELECT COUNT(*) AS n, SUM(saldo_dia1) AS d1, SUM(saldo_dia2) AS d2 FROM estudiantes WHERE identificacion BETWEEN '9001' AND '9040'");
     assert.deepEqual([p6c.n, p6c.d1, p6c.d2], [40, 400000, 400000]);
     paso('dos administradores a la vez: uno importa 40 personas desde Excel (rechaza la repetida) y el otro registra 10 a mano');
+
+    // ---------- cursos del colegio
+    const listaCursos = (await admin('GET', '/api/admin/cursos')).datos.map((x) => x.nombre);
+    assert.deepEqual(listaCursos.slice(0, 4), ['JARDÍN', 'TRANSICIÓN', '1°', '2°']);
+    assert.ok(listaCursos.indexOf('8A') < listaCursos.indexOf('8B') && listaCursos.indexOf('8B') < listaCursos.indexOf('9°') && listaCursos.indexOf('10°') < listaCursos.indexOf('11A'));
+    assert.deepEqual((await admin('POST', '/api/admin/cursos/colegio')).datos.agregados, []);
+    assert.equal((await admin('POST', '/api/admin/cursos', { nombre: '9' })).status, 409);
+    const impCursos = await admin('POST', '/api/admin/personas/importar', { filas: [
+      { nombre_completo: 'Curso Nueve', curso: '9', identificacion: 'C-1' },
+      { nombre_completo: 'Curso Ocho B', curso: '8 b', identificacion: 'C-2' },
+      { nombre_completo: 'Curso Jardin', curso: 'jardin', identificacion: 'C-3' },
+      { nombre_completo: 'Curso Uno', curso: '1º', identificacion: 'C-4' }] });
+    assert.equal(impCursos.datos.creadas, 4);
+    const cursosImp = (await query("SELECT c.nombre FROM estudiantes e JOIN cursos c ON c.id = e.curso_id WHERE e.identificacion LIKE 'C-%' ORDER BY e.identificacion")).map((x) => x.nombre);
+    assert.deepEqual(cursosImp, ['9°', '8B', 'JARDÍN', '1°']);
+    paso('cursos del colegio precargados (Jardín a 11, 8A-8B, 11A-11B) en orden; "9", "8 b" o "jardin" del Excel van al curso correcto');
+
+    // ---------- bloqueo masivo
+    const cursoNueve = (await admin('GET', '/api/admin/cursos')).datos.find((x) => x.nombre === '9°').id;
+    const bq1 = await admin('PUT', '/api/admin/personas-estado', { estado: 'BLOQUEADA', filtros: { curso_id: cursoNueve } });
+    const [{ n: en9 }] = await query('SELECT COUNT(*) AS n FROM estudiantes WHERE curso_id = ?', [cursoNueve]);
+    assert.equal(bq1.datos.cambiadas, en9);
+    const [{ n: fuera9 }] = await query("SELECT COUNT(*) AS n FROM estudiantes WHERE estado = 'BLOQUEADA' AND (curso_id <> ? OR curso_id IS NULL)", [cursoNueve]);
+    assert.equal(fuera9, 0);
+    const bqTodos = await admin('PUT', '/api/admin/personas-estado', { estado: 'BLOQUEADA', filtros: {} });
+    const [{ n: totalP }] = await query('SELECT COUNT(*) AS n FROM estudiantes');
+    assert.equal(bqTodos.datos.cambiadas, totalP - en9);
+    const bloqueada = await vend('POST', '/api/ventas/consultar', { qr });
+    assert.equal(bloqueada.status, 423);
+    assert.equal((await vend('PUT', '/api/admin/personas-estado', { estado: 'BLOQUEADA' })).status, 403);
+    const act = await admin('PUT', '/api/admin/personas-estado', { estado: 'ACTIVA', filtros: {} });
+    assert.equal(act.datos.cambiadas, totalP);
+    paso('bloqueo masivo: por curso o a todas las personas (nadie puede comprar) y activación de todas de nuevo');
+
+    // ---------- métricas e historial (quién hizo qué)
+    const met = (await admin('GET', '/api/admin/metricas')).datos;
+    const [{ n: nVentas, t: tVentas }] = await query("SELECT COUNT(*) AS n, COALESCE(SUM(valor),0) AS t FROM transacciones WHERE estado = 'CONFIRMADA'");
+    assert.deepEqual([met.resumen.ventas, met.resumen.total_ventas], [nVentas, tVentas]);
+    assert.equal(met.por_hora.reduce((a, x) => a + x.cantidad, 0), nVentas);
+    const filaDulces = met.por_usuario.find((u) => u.usuario === 'dulces10a');
+    const [{ n: vDulces }] = await query("SELECT COUNT(*) AS n FROM transacciones t JOIN usuarios u ON u.id = t.vendedor_id WHERE u.usuario = 'dulces10a' AND t.estado = 'CONFIRMADA'");
+    assert.equal(filaDulces.ventas, vDulces);
+    assert.ok(filaDulces.ingresos >= 1);
+    const hVentas = (await admin('GET', `/api/admin/historial?usuario_id=${filaDulces.id}&tipo=VENTA&limite=2000`)).datos;
+    assert.equal(hVentas.length, vDulces + (await query("SELECT COUNT(*) AS n FROM transacciones t JOIN usuarios u ON u.id = t.vendedor_id WHERE u.usuario = 'dulces10a' AND t.estado = 'ANULADA'"))[0].n);
+    assert.ok(hVentas.every((x) => x.usuario_id === filaDulces.id && x.descripcion.startsWith('Vendió en')));
+    const hFallido = (await admin('GET', '/api/admin/historial?tipo=SESION&limite=2000')).datos;
+    assert.ok(hFallido.some((x) => x.accion === 'INICIO_FALLIDO') && hFallido.some((x) => x.accion === 'INICIO_SESION'));
+    const hAnul = (await admin('GET', '/api/admin/historial?tipo=ANULACION')).datos;
+    assert.ok(hAnul.length >= 1 && hAnul[0].descripcion.startsWith('Anuló la venta'));
+    const hx = await admin('GET', '/api/admin/reportes/historial?formato=xlsx');
+    assert.equal(hx.status, 200);
+    assert.equal((await vend('GET', '/api/admin/historial')).status, 403);
+    paso('métricas (ventas por hora, por día, por usuario) e historial de quién hizo qué, con filtros y exportación a Excel');
 
     // ---------- inmutabilidad
     await assert.rejects(query("UPDATE estudiantes SET saldo = -1 WHERE id = ?", [id]));
