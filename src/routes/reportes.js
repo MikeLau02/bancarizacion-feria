@@ -8,6 +8,7 @@ const ExcelJS = require('exceljs');
 const { query } = require('../db');
 const { asyncH, ErrorApp, hoy } = require('../utils');
 const { obtenerConfig } = require('../services/configuracion');
+const ingresosSrv = require('../services/ingresos');
 
 const router = express.Router();
 const fechaValida = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null);
@@ -36,8 +37,7 @@ const REPORTES = {
     titulo: 'Listado de personas y saldo',
     columnas: [
       ['curso', 'Curso'], ['nombre_completo', 'Nombre completo'], ['tipo', 'Rol'], ['identificacion', 'Identificación'],
-      ['estado', 'Estado'], ['total_cargado', 'Total cargado', D], ['total_gastado', 'Total gastado', D], ['saldo_dia1', 'Saldo día 1', D],
-      ['saldo_dia2', 'Saldo día 2', D], ['saldo', 'Saldo total', D],
+      ['estado', 'Estado'], ['total_cargado', 'Total cargado', D], ['total_gastado', 'Total gastado', D], ['saldo', 'Saldo restante', D],
       ['compras', 'N.º compras'],
     ],
     async datos(qs) {
@@ -45,7 +45,7 @@ const REPORTES = {
       let w = '';
       if (qs.curso_id) { w = 'WHERE e.curso_id = ?'; p.push(parseInt(qs.curso_id, 10)); }
       return query(
-        `SELECT COALESCE(c.nombre,'') AS curso, e.nombre_completo, e.tipo, e.identificacion, e.estado, e.saldo, e.saldo_dia1, e.saldo_dia2,
+        `SELECT COALESCE(c.nombre,'') AS curso, e.nombre_completo, e.tipo, e.identificacion, e.estado, e.saldo,
            (SELECT COALESCE(SUM(valor),0) FROM recargas r WHERE r.estudiante_id = e.id) AS total_cargado,
            (SELECT COALESCE(SUM(valor),0) FROM transacciones t WHERE t.estudiante_id = e.id AND t.estado='CONFIRMADA') AS total_gastado,
            (SELECT COUNT(*) FROM transacciones t WHERE t.estudiante_id = e.id AND t.estado='CONFIRMADA') AS compras
@@ -155,20 +155,39 @@ const REPORTES = {
   recargas: {
     titulo: 'Cargas y recargas de saldo',
     columnas: [
-      ['fecha', 'Fecha'], ['hora', 'Hora'], ['persona', 'Persona'], ['curso', 'Curso'], ['tipo', 'Tipo'], ['dia', 'Asignado a'],
-      ['valor', 'Valor', D], ['valor_dia1', 'Para día 1', D], ['valor_dia2', 'Para día 2', D],
+      ['fecha', 'Fecha'], ['hora', 'Hora'], ['persona', 'Persona'], ['curso', 'Curso'], ['tipo', 'Tipo'],
+      ['valor', 'Valor', D],
       ['saldo_anterior', 'Saldo anterior', D], ['saldo_nuevo', 'Nuevo saldo', D], ['administrador', 'Administrador'], ['observacion', 'Observación'],
     ],
     async datos(qs) {
-      const r = rangoFechas(qs, 'rc.fecha_hora');
+      // Mismos filtros que la pantalla Ingresos: fechas, administrador, tipo, curso y persona
+      const w = ingresosSrv.filtrosIngresos(qs);
       return query(
-        `SELECT DATE_FORMAT(rc.fecha_hora,'%d/%m/%Y') AS fecha, DATE_FORMAT(rc.fecha_hora,'%H:%i') AS hora, e.nombre_completo AS persona,
-           COALESCE(c.nombre,'') AS curso, rc.tipo,
-           CASE rc.dia WHEN 'DIA1' THEN 'Día 1' WHEN 'DIA2' THEN 'Día 2' ELSE 'Dividido entre los dos días' END AS dia,
-           rc.valor, rc.valor_dia1, rc.valor_dia2, rc.saldo_anterior, rc.saldo_nuevo, u.nombre AS administrador,
-           COALESCE(rc.observacion,'') AS observacion
-         FROM recargas rc JOIN estudiantes e ON e.id = rc.estudiante_id LEFT JOIN cursos c ON c.id = e.curso_id
-         JOIN usuarios u ON u.id = rc.admin_id WHERE 1=1 ${r.sql} ORDER BY rc.fecha_hora, rc.id`, r.params);
+        `SELECT DATE_FORMAT(r.fecha_hora,'%d/%m/%Y') AS fecha, DATE_FORMAT(r.fecha_hora,'%H:%i') AS hora, e.nombre_completo AS persona,
+           COALESCE(c.nombre,'') AS curso, r.tipo,
+           r.valor, r.saldo_anterior, r.saldo_nuevo, u.nombre AS administrador,
+           COALESCE(r.observacion,'') AS observacion
+         ${ingresosSrv.DESDE} WHERE ${w.sql} ORDER BY r.fecha_hora, r.id`, w.p);
+    },
+  },
+  'ingresos-admin': {
+    titulo: 'Ingresos por administrador y día',
+    columnas: [
+      ['dia', 'Fecha'], ['administrador', 'Administrador'], ['cantidad', 'N.º cargas'], ['personas', 'Personas'],
+      ['iniciales', 'Saldos iniciales', D], ['recargas', 'Recargas', D], ['ajustes', 'Ajustes', D], ['total', 'Total ingresado', D],
+    ],
+    async datos(qs) {
+      const w = ingresosSrv.filtrosIngresos(qs);
+      const filas = await query(
+        `SELECT DATE_FORMAT(r.fecha_hora, '%d/%m/%Y') AS dia, DATE_FORMAT(r.fecha_hora, '%Y-%m-%d') AS orden, u.nombre AS administrador, ${ingresosSrv.SUMAS}
+         ${ingresosSrv.DESDE} WHERE ${w.sql}
+         GROUP BY DATE_FORMAT(r.fecha_hora, '%d/%m/%Y'), DATE_FORMAT(r.fecha_hora, '%Y-%m-%d'), u.id, u.nombre ORDER BY orden, administrador`, w.p);
+      const t = (k) => filas.reduce((a, f) => a + Number(f[k]), 0);
+      if (filas.length) {
+        filas.push({ dia: 'TOTAL', administrador: '', cantidad: t('cantidad'), personas: '', iniciales: t('iniciales'), recargas: t('recargas'),
+          ajustes: t('ajustes'), total: t('total') });
+      }
+      return filas;
     },
   },
   resumen: {
@@ -177,7 +196,7 @@ const REPORTES = {
     async datos() {
       const cfg = await obtenerConfig();
       const [[p], [c], [v], [a], [e], dias] = await Promise.all([
-        query(`SELECT COUNT(*) n, COALESCE(SUM(saldo),0) s, COALESCE(SUM(saldo_dia1),0) s1, COALESCE(SUM(saldo_dia2),0) s2, COALESCE(SUM(saldo=0),0) ag, COALESCE(SUM(saldo>0 AND saldo<?),0) b,
+        query(`SELECT COUNT(*) n, COALESCE(SUM(saldo),0) s, COALESCE(SUM(saldo=0),0) ag, COALESCE(SUM(saldo>0 AND saldo<?),0) b,
                  COALESCE(SUM(estado='BLOQUEADA'),0) bl FROM estudiantes`, [cfg.saldo_bajo]),
         query('SELECT COALESCE(SUM(valor),0) t FROM recargas'),
         query(`SELECT COUNT(*) n, COALESCE(SUM(valor),0) t, COUNT(DISTINCT estudiante_id) comp FROM transacciones WHERE estado='CONFIRMADA'`),
@@ -195,8 +214,6 @@ const REPORTES = {
         { indicador: 'Total de saldo cargado', valor: $(c.t) },
         { indicador: 'Total vendido', valor: $(v.t) },
         { indicador: 'Saldo pendiente por gastar', valor: $(p.s) },
-        { indicador: '   · Saldo del día 1 sin gastar', valor: $(p.s1) },
-        { indicador: '   · Saldo reservado para el día 2', valor: $(p.s2) },
         { indicador: 'Número de transacciones', valor: v.n },
         { indicador: 'Personas que compraron', valor: v.comp },
         { indicador: 'Venta promedio', valor: $(v.n ? Math.round(v.t / v.n) : 0) },

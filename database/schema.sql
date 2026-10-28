@@ -70,9 +70,9 @@ CREATE TABLE IF NOT EXISTS estudiantes (
   curso_id        INT NULL,
   identificacion  VARCHAR(40)  NOT NULL,
   saldo_inicial   INT          NOT NULL DEFAULT 0,
-  saldo           INT          NOT NULL DEFAULT 0,   -- saldo total = saldo_dia1 + saldo_dia2
-  saldo_dia1      INT          NOT NULL DEFAULT 0,   -- se puede gastar desde el día 1
-  saldo_dia2      INT          NOT NULL DEFAULT 0,   -- reservado: solo se puede gastar desde el día 2
+  saldo           INT          NOT NULL DEFAULT 0,   -- saldo total, todo disponible (feria de un solo día)
+  saldo_dia1      INT          NOT NULL DEFAULT 0,   -- = saldo (columna heredada de la versión de dos días)
+  saldo_dia2      INT          NOT NULL DEFAULT 0,   -- siempre 0 (heredada; init-db la une a saldo_dia1)
   estado          ENUM('ACTIVA','BLOQUEADA') NOT NULL DEFAULT 'ACTIVA',
   qr_token        CHAR(32)     NOT NULL,
   creado_en       DATETIME     NOT NULL,
@@ -182,8 +182,5 @@ CREATE TABLE IF NOT EXISTS configuracion (
 INSERT IGNORE INTO configuracion (clave, valor) VALUES
   ('nombre_feria',          'Feria de Emprendimiento Escolar'),
   ('saldo_bajo',            '5000'),
-  ('limite_diario_activo',  '1'),
-  ('fecha_dia1',            '2026-11-09'),
-  ('fecha_dia2',            '2026-11-10'),
-  ('porcentaje_dia1',       '50'),
+  ('fecha_dia1',            '2026-11-09'),   -- fecha del día de la feria
   ('solo_dias_feria',       '0');

@@ -79,7 +79,7 @@ async function cargarCatalogos() {
 // ===================================================================== navegación
 const RUTAS = {
   panel: vistaPanel, personas: vistaPersonas, persona: vistaPersona, qr: vistaQR, emprendimientos: vistaEmprendimientos,
-  transacciones: vistaTransacciones, metricas: vistaMetricas, reportes: vistaReportes, config: vistaConfig,
+  transacciones: vistaTransacciones, metricas: vistaMetricas, ingresos: vistaIngresos, reportes: vistaReportes, config: vistaConfig,
 };
 async function navegar() {
   clearInterval(S.refresco);
@@ -131,9 +131,7 @@ async function vistaPanel() {
   const d = await api('/api/admin/dashboard');
   S.cfg = d.config;
   const i = d.indicadores;
-  const limite = d.config.limite_diario_activo
-    ? `Día 1 (${fecha(d.config.fecha_dia1 + ' 00:00:00')}): se gasta el saldo del día 1 · Día 2 (${fecha(d.config.fecha_dia2 + ' 00:00:00')}): todo el saldo · ${d.dia2_habilitado ? 'Hoy ya se puede gastar todo' : 'Hoy el saldo del día 2 está reservado'}`
-    : 'Saldo por día desactivado: se puede gastar todo cualquier día';
+  const limite = `Feria de un solo día${d.config.fecha_feria ? ` (${fecha(d.config.fecha_feria + ' 00:00:00')})` : ''}: cada persona puede gastar todo su saldo`;
   const listaPersonas = (arr, vacio) => (arr.length ? `<div class="list-group list-group-flush">${arr.map((p) => `
       <a href="#persona/${p.id}" class="list-group-item list-group-item-action d-flex justify-content-between">
       <span>${esc(p.nombre_completo)} <small class="text-secondary">${esc(p.curso || '')}</small></span>${badgeSaldo(p.saldo)}</a>`).join('')}</div>`
@@ -150,8 +148,6 @@ async function vistaPanel() {
       ${tile('bi-wallet2', 'Total de saldo cargado', pesos(i.total_cargado), 'primary')}
       ${tile('bi-cart-check-fill', 'Total vendido', pesos(i.total_vendido), 'success', '#transacciones')}
       ${tile('bi-piggy-bank', 'Saldo pendiente por gastar', pesos(i.saldo_pendiente), 'info')}
-      ${tile('bi-1-circle', 'Saldo del día 1 sin gastar', pesos(i.saldo_dia1), 'info')}
-      ${tile('bi-2-circle', 'Saldo reservado para el día 2', pesos(i.saldo_dia2), 'info')}
       ${tile('bi-receipt', 'Transacciones', i.transacciones.toLocaleString('es-CO'), 'secondary', '#transacciones')}
       ${tile('bi-x-circle-fill', 'Con saldo agotado', i.agotados, 'danger', '#personas?saldo=agotado')}
       ${tile('bi-exclamation-triangle-fill', `Saldo bajo (menos de ${pesos(d.config.saldo_bajo)})`, i.saldo_bajo, 'warning', '#personas?saldo=bajo')}
@@ -265,13 +261,12 @@ async function cargarPersonas(q) {
     <div class="px-3 pt-3 small text-secondary">${filas.length} personas · saldo disponible total ${pesos(total)}</div>
     <div class="table-responsive"><table class="table table-hover align-middle mb-0">
       <thead><tr><th>Curso</th><th>Nombre</th><th class="d-none d-md-table-cell">Tipo</th><th class="d-none d-lg-table-cell">Identificación</th>
-      <th class="num d-none d-lg-table-cell">Cargado</th><th class="num d-none d-lg-table-cell">Gastado</th><th class="num d-none d-md-table-cell">Día 1</th><th class="num d-none d-md-table-cell">Día 2</th><th class="num">Saldo</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead>
+      <th class="num d-none d-lg-table-cell">Cargado</th><th class="num d-none d-lg-table-cell">Gastado</th><th class="num">Saldo</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead>
       <tbody>${filas.map((f) => `<tr>
         <td>${esc(f.curso || '-')}</td>
         <td><a href="#persona/${f.id}" class="fw-semibold text-decoration-none">${esc(f.nombre_completo)}</a></td>
         <td class="d-none d-md-table-cell">${TIPOS[f.tipo]}</td><td class="d-none d-lg-table-cell">${esc(f.identificacion)}</td>
         <td class="num d-none d-lg-table-cell">${pesos(f.total_cargado)}</td><td class="num d-none d-lg-table-cell">${pesos(f.total_gastado)}</td>
-        <td class="num d-none d-md-table-cell">${pesos(f.saldo_dia1)}</td><td class="num d-none d-md-table-cell">${pesos(f.saldo_dia2)}</td>
         <td class="num">${badgeSaldo(f.saldo)}</td><td>${badgeEstado(f.estado)}</td>
         <td class="text-end text-nowrap">
           <a class="btn btn-sm btn-outline-primary" href="#persona/${f.id}" title="Ver historial y QR"><i class="bi bi-eye"></i></a>
@@ -304,7 +299,7 @@ function formPersona(p) {
       ${nuevo ? `<div class="row g-2"><div class="col-7"><label class="form-label">Saldo inicial asignado</label>
         <div class="input-group"><span class="input-group-text">$</span><input class="form-control" name="saldo_inicial" inputmode="numeric" placeholder="25.000"></div></div>
         <div class="col-5"><label class="form-label">Estado</label><select class="form-select" name="estado"><option value="ACTIVA">Activa</option><option value="BLOQUEADA">Bloqueada</option></select></div></div>
-        <p class="small text-secondary mt-2 mb-0"><i class="bi bi-pie-chart"></i> El saldo inicial se divide: ${S.cfg.porcentaje_dia1}% para el día 1 y el resto reservado para el día 2.<br>
+        <p class="small text-secondary mt-2 mb-0"><i class="bi bi-wallet2"></i> Todo el saldo queda disponible para gastar el día de la feria.<br>
         <i class="bi bi-qr-code"></i> El código QR único se genera automáticamente al guardar.</p>`
     : `<p class="small text-secondary mb-0">El saldo se modifica con <strong>Recargar</strong> o <strong>Ajustar</strong> en el detalle de la persona, para que quede registro.</p>`}
     </form>`,
@@ -331,26 +326,17 @@ function formPersona(p) {
 function formSaldo(p, tipo) {
   const esAjuste = tipo === 'AJUSTE';
   const primera = Number(p.total_cargado) === 0;
-  const pct = S.cfg.porcentaje_dia1;
   const cuerpo = modal({
     titulo: esAjuste ? 'Ajustar saldo' : 'Recargar saldo',
     cuerpo: `<form novalidate>
       <p class="mb-1"><strong>${esc(p.nombre_completo)}</strong> ${p.curso ? '· ' + esc(p.curso) : ''}</p>
-      <p>Saldo actual: <strong class="fs-5">${pesos(p.saldo)}</strong>
-        <span class="text-secondary small">(día 1: ${pesos(p.saldo_dia1)} · día 2: ${pesos(p.saldo_dia2)})</span></p>
+      <p>Saldo actual: <strong class="fs-5">${pesos(p.saldo)}</strong></p>
       ${esAjuste ? `<div class="mb-2"><div class="btn-group w-100" role="group">
         <input type="radio" class="btn-check" name="signo" id="sMas" value="1" checked><label class="btn btn-outline-success" for="sMas">Sumar</label>
         <input type="radio" class="btn-check" name="signo" id="sMenos" value="-1"><label class="btn btn-outline-danger" for="sMenos">Restar</label></div></div>` : ''}
       <div class="mb-3"><label class="form-label">Valor *</label><div class="input-group input-group-lg"><span class="input-group-text">$</span>
         <input class="form-control" name="valor" inputmode="numeric" required></div></div>
-      ${primera ? `<div class="alert alert-info small py-2">Es la primera carga de esta persona: se divide automáticamente, ${pct}% para el día 1 y el resto reservado para el día 2.</div>
-        <input type="hidden" name="dia" value="AMBOS">`
-    : `<div class="mb-3"><label class="form-label">¿Para qué día es este saldo? *</label>
-        <div class="btn-group w-100 flex-wrap" role="group">
-          <input type="radio" class="btn-check" name="dia" id="dAmbos" value="AMBOS" ${esAjuste ? '' : 'checked'}><label class="btn btn-outline-primary" for="dAmbos">Dividir entre los dos días</label>
-          <input type="radio" class="btn-check" name="dia" id="dUno" value="DIA1" ${esAjuste ? 'checked' : ''}><label class="btn btn-outline-primary" for="dUno">Día 1</label>
-          <input type="radio" class="btn-check" name="dia" id="dDos" value="DIA2"><label class="btn btn-outline-primary" for="dDos">Día 2</label>
-        </div><div class="form-text">Pregunte al comprador en qué día quiere usar este dinero.</div></div>`}
+      ${primera && !esAjuste ? `<div class="alert alert-info small py-2">Es la primera carga de esta persona${p.estado === 'BLOQUEADA' ? ': al registrarla la cuenta queda ACTIVA' : ''}.</div>` : ''}
       <div class="mb-2"><label class="form-label">Observación ${esAjuste ? '*' : ''}</label><input class="form-control" name="observacion" maxlength="255"
         placeholder="${esAjuste ? 'Motivo del ajuste' : 'Ej.: aporte adicional de la familia'}"></div>
       <div class="alert alert-light border small mb-0" id="previa"></div>
@@ -363,9 +349,8 @@ function formSaldo(p, tipo) {
         if (!valor) throw new Error('Ingrese un valor válido.');
         if (esAjuste && !d.observacion.trim()) throw new Error('Escriba el motivo del ajuste.');
         if (d.signo === '-1') valor = -valor;
-        if (valor < 0 && d.dia === 'AMBOS') throw new Error('Para restar, elija de qué día se descuenta (día 1 o día 2).');
-        const r = await api(`/api/admin/personas/${p.id}/saldo`, { method: 'POST', body: { tipo, valor, dia: d.dia, observacion: d.observacion } });
-        aviso(`Saldo actualizado: ${pesos(r.saldo_anterior)} → ${pesos(r.saldo_nuevo)} (día 1 ${r.valor_dia1 >= 0 ? '+' : ''}${pesos(r.valor_dia1)}, día 2 ${r.valor_dia2 >= 0 ? '+' : ''}${pesos(r.valor_dia2)})${r.activada ? '. Primera recarga: la cuenta quedó ACTIVA.' : ''}`);
+        const r = await api(`/api/admin/personas/${p.id}/saldo`, { method: 'POST', body: { tipo, valor, observacion: d.observacion } });
+        aviso(`Saldo actualizado: ${pesos(r.saldo_anterior)} → ${pesos(r.saldo_nuevo)}${r.activada ? '. Primera recarga: la cuenta quedó ACTIVA.' : ''}`);
         navegar();
       },
     }],
@@ -375,12 +360,8 @@ function formSaldo(p, tipo) {
   formatearDinero(inp);
   const previa = () => {
     const v = (aEntero(inp.value) || 0) * (qs('#sMenos', cuerpo)?.checked ? -1 : 1);
-    const dia = new FormData(form).get('dia');
-    const d1 = dia === 'DIA1' ? v : dia === 'DIA2' ? 0 : Math.round((v * pct) / 100);
-    const d2 = v - d1;
-    const malo = p.saldo_dia1 + d1 < 0 || p.saldo_dia2 + d2 < 0;
-    qs('#previa', cuerpo).innerHTML = malo ? '<strong class="text-danger">No permitido: el saldo quedaría negativo.</strong>'
-      : `Nuevo saldo: <strong>${pesos(p.saldo + v)}</strong> · día 1: ${pesos(p.saldo_dia1 + d1)} · día 2: ${pesos(p.saldo_dia2 + d2)}`;
+    qs('#previa', cuerpo).innerHTML = p.saldo + v < 0 ? '<strong class="text-danger">No permitido: el saldo quedaría negativo.</strong>'
+      : `Nuevo saldo: <strong>${pesos(p.saldo + v)}</strong>`;
   };
   form.addEventListener('input', previa); // el formulario se reemplaza en cada modal
   previa();
@@ -415,7 +396,7 @@ function importarPersonas() {
     cuerpo: `<form>
       <p>Suba un archivo de <strong>Excel (.xlsx)</strong> o <strong>CSV</strong> con estas columnas en la primera fila:
       <code>nombre, tipo, curso, identificacion, saldo</code>. El tipo puede quedar vacío (se toma como estudiante).
-      Los cursos que no existan se crean automáticamente. El saldo inicial se reparte entre día 1 y día 2 según la configuración.</p>
+      Los cursos que no existan se crean automáticamente. Todo el saldo inicial queda disponible para gastar.</p>
       <p class="d-flex flex-wrap gap-3"><a href="/api/admin/plantilla-personas.xlsx"><i class="bi bi-file-earmark-excel"></i> Plantilla Excel</a>
         <a href="${url}" download="plantilla-personas.csv"><i class="bi bi-filetype-csv"></i> Plantilla CSV</a></p>
       <input type="file" class="form-control" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" id="archivoCSV">
@@ -505,11 +486,7 @@ async function vistaPersona(id) {
         <div class="text-center"><div class="text-secondary">Saldo total</div>
           <div class="saldo-grande ${p.saldo === 0 ? 'text-danger' : p.saldo < S.cfg.saldo_bajo ? 'text-warning' : 'text-success'}">${pesos(p.saldo)}</div>
           ${p.saldo === 0 ? '<div class="text-danger fw-semibold">Saldo agotado</div>' : p.saldo < S.cfg.saldo_bajo ? '<div class="text-warning-emphasis fw-semibold">Saldo bajo</div>' : ''}
-          <div class="row g-2 mt-1 justify-content-center">
-            <div class="col-6 col-lg-4"><div class="border rounded-3 p-2"><div class="small text-secondary">Saldo día 1</div><div class="fw-bold">${pesos(p.saldo_dia1)}</div></div></div>
-            <div class="col-6 col-lg-4"><div class="border rounded-3 p-2"><div class="small text-secondary">Saldo día 2</div><div class="fw-bold">${pesos(p.saldo_dia2)}</div></div></div>
-            <div class="col-12 col-lg-4"><div class="border rounded-3 p-2 border-primary"><div class="small text-secondary">Puede gastar hoy</div><div class="fw-bold text-primary">${pesos(p.disponible_hoy)}</div></div></div>
-          </div>
+          ${p.regla ? `<div class="small text-secondary">${esc(p.regla)}</div>` : ''}
           <div class="d-flex justify-content-center gap-2 mt-3">
             <button class="btn btn-success" id="bRecargar"><i class="bi bi-plus-circle"></i> Recargar saldo</button>
             <button class="btn btn-outline-warning" id="bAjustar"><i class="bi bi-sliders"></i> Ajustar</button>
@@ -537,12 +514,11 @@ async function vistaPersona(id) {
           || '<tr><td colspan="7" class="text-secondary">Sin compras todavía.</td></tr>'}</tbody></table></div></div>
     <div class="card"><div class="p-3 pb-0"><h2 class="h5 fw-bold">Cargas y modificaciones de saldo</h2></div>
       <div class="table-responsive"><table class="table align-middle mb-0">
-        <thead><tr><th>Fecha y hora</th><th>Tipo</th><th>Asignado a</th><th class="num">Valor</th><th class="num">Saldo anterior</th><th class="num">Nuevo saldo</th><th>Administrador</th><th>Observación</th></tr></thead>
+        <thead><tr><th>Fecha y hora</th><th>Tipo</th><th class="num">Valor</th><th class="num">Saldo anterior</th><th class="num">Nuevo saldo</th><th>Administrador</th><th>Observación</th></tr></thead>
         <tbody>${d.recargas.map((r) => `<tr><td>${fechaHora(r.fecha_hora)}</td><td>${r.tipo === 'INICIAL' ? 'Saldo inicial' : r.tipo === 'RECARGA' ? 'Recarga' : 'Ajuste'}</td>
-          <td>${r.dia === 'DIA1' ? 'Día 1' : r.dia === 'DIA2' ? 'Día 2' : 'Ambos días'}<div class="small text-secondary">${pesos(r.valor_dia1)} / ${pesos(r.valor_dia2)}</div></td>
           <td class="num ${r.valor < 0 ? 'text-danger' : 'text-success'}">${r.valor < 0 ? '-' : '+'}${pesos(Math.abs(r.valor))}</td><td class="num">${pesos(r.saldo_anterior)}</td>
           <td class="num">${pesos(r.saldo_nuevo)}</td><td>${esc(r.administrador)}</td><td>${esc(r.observacion || '')}</td></tr>`).join('')
-          || '<tr><td colspan="8" class="text-secondary">Sin cargas de saldo.</td></tr>'}</tbody></table></div></div>`;
+          || '<tr><td colspan="7" class="text-secondary">Sin cargas de saldo.</td></tr>'}</tbody></table></div></div>`;
   qs('#bEditar').addEventListener('click', () => formPersona(p));
   qs('#bRecargar').addEventListener('click', () => formSaldo(p, 'RECARGA'));
   qs('#bAjustar').addEventListener('click', () => formSaldo(p, 'AJUSTE'));
@@ -847,6 +823,106 @@ async function vistaReportes() {
   }));
 }
 
+// ===================================================================== INGRESOS POR ADMINISTRADOR
+const TIPO_CARGA = { INICIAL: 'Saldo inicial', RECARGA: 'Recarga', AJUSTE: 'Ajuste' };
+
+async function vistaIngresos() {
+  const p = params();
+  const admins = await api('/api/admin/administradores');
+  const sel = (nombre, opciones, vacio) => `<select class="form-select" name="${nombre}"><option value="">${vacio}</option>
+    ${opciones.map(([v, t]) => `<option value="${v}" ${p.get(nombre) === String(v) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  C.innerHTML = `
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+      <div><h1 class="h3 fw-bold mb-0">Ingresos por administrador</h1>
+        <div class="text-secondary small">Cuánto dinero cargó cada administrador en saldos (cuadre de caja).</div></div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-success" data-exportar="ingresos-admin"><i class="bi bi-file-earmark-excel"></i> Cuadre por día (Excel)</button>
+        <button class="btn btn-outline-success" data-exportar="recargas"><i class="bi bi-file-earmark-excel"></i> Detalle (Excel)</button>
+      </div>
+    </div>
+    <form class="card p-3 mb-3" id="iFiltros"><div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2"><label class="form-label small">Desde</label><input type="date" class="form-control" name="desde" value="${esc(p.get('desde') || '')}"></div>
+      <div class="col-6 col-md-2"><label class="form-label small">Hasta</label><input type="date" class="form-control" name="hasta" value="${esc(p.get('hasta') || '')}"></div>
+      <div class="col-md-3"><label class="form-label small">Administrador</label>${sel('admin_id', admins.map((a) => [a.id, `${a.nombre} (${a.usuario})`]), 'Todos los administradores')}</div>
+      <div class="col-6 col-md-2"><label class="form-label small">Tipo</label>${sel('tipo', Object.entries(TIPO_CARGA), 'Todos los tipos')}</div>
+      <div class="col-6 col-md-3"><label class="form-label small">Curso</label><select class="form-select" name="curso_id">${opcionesCursos(p.get('curso_id'))}</select></div>
+      <div class="col-6 col-md-4"><label class="form-label small">Persona</label><input class="form-control" name="q" placeholder="Nombre o identificación" value="${esc(p.get('q') || '')}"></div>
+      <div class="col-md-5 d-flex justify-content-md-end"><button type="button" class="btn btn-link" id="iLimpiar">Quitar filtros</button></div>
+    </div></form>
+    <div id="iContenido"><div class="p-4 text-center text-secondary"><div class="spinner-border"></div></div></div>`;
+  const form = qs('#iFiltros');
+  const filtros = () => new URLSearchParams([...new FormData(form).entries()].filter(([, v]) => v));
+  const cargar = async () => {
+    const f = filtros();
+    history.replaceState(null, '', '#ingresos' + (f.toString() ? '?' + f : ''));
+    const d = await api('/api/admin/ingresos?' + f);
+    if (!qs('#iContenido')) return;
+    const r = d.resumen;
+    const max = Math.max(1, ...d.por_admin.map((a) => Number(a.total)));
+    // Cuadre por día: agrupa las filas de cada fecha con su subtotal
+    const dias = [];
+    for (const x of d.por_dia) {
+      let g = dias.find((y) => y.dia === x.dia);
+      if (!g) { g = { dia: x.dia, filas: [], total: 0, cantidad: 0 }; dias.push(g); }
+      g.filas.push(x); g.total += Number(x.total); g.cantidad += x.cantidad;
+    }
+    qs('#iContenido').innerHTML = `
+      <div class="row g-3 mb-3">
+        ${tile('bi-cash-coin', 'Total ingresado', pesos(r.total), 'success')}
+        ${tile('bi-wallet2', 'Cargas', r.cantidad.toLocaleString('es-CO'), 'primary')}
+        ${tile('bi-people', 'Personas', r.personas.toLocaleString('es-CO'), 'primary')}
+        ${tile('bi-1-circle', 'Saldos iniciales', pesos(r.iniciales), 'secondary')}
+        ${tile('bi-plus-circle', 'Recargas', pesos(r.recargas), 'secondary')}
+        ${tile('bi-sliders', 'Ajustes', pesos(r.ajustes), r.ajustes < 0 ? 'danger' : 'secondary')}
+      </div>
+      <div class="card mb-3"><div class="p-3 pb-2"><h2 class="h5 fw-bold mb-0">Por administrador</h2>
+        <div class="small text-secondary">Toque una fila para ver solo ese administrador.</div></div>
+        ${d.por_admin.length ? `<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+        <thead><tr><th>Administrador</th><th class="num">Cargas</th><th class="num">Personas</th><th class="num">Iniciales</th><th class="num">Recargas</th>
+          <th class="num">Ajustes</th><th class="num">Total ingresado</th><th style="width:16%"></th><th>Primera / última carga</th></tr></thead>
+        <tbody>${d.por_admin.map((a) => `<tr data-admin="${a.id}" style="cursor:pointer" title="${esc(a.nombre)}: ${pesos(a.total)} en ${a.cantidad} cargas">
+          <td><div class="fw-semibold">${esc(a.nombre)}</div><code class="small">${esc(a.usuario)}</code></td>
+          <td class="num">${a.cantidad}</td><td class="num">${a.personas}</td><td class="num">${pesos(a.iniciales)}</td><td class="num">${pesos(a.recargas)}</td>
+          <td class="num ${a.ajustes < 0 ? 'text-danger' : ''}">${pesos(a.ajustes)}</td><td class="num fw-bold">${pesos(a.total)}</td>
+          <td><div class="barra-wrap"><div class="barra" style="width:${Math.max(0, (Number(a.total) / max) * 100)}%"></div></div></td>
+          <td class="small text-nowrap">${fechaHora(a.primera)}<br>${fechaHora(a.ultima)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr class="fw-bold"><td>Total</td><td class="num">${r.cantidad}</td><td class="num">${r.personas}</td><td class="num">${pesos(r.iniciales)}</td>
+          <td class="num">${pesos(r.recargas)}</td><td class="num">${pesos(r.ajustes)}</td><td class="num">${pesos(r.total)}</td><td></td><td></td></tr></tfoot>
+        </table></div>` : '<p class="p-3 text-secondary mb-0">No hay cargas con estos filtros.</p>'}</div>
+      <div class="row g-3 mb-3">
+        <div class="col-lg-7"><div class="card p-3 h-100"><h2 class="h6 fw-bold">Cuadre por día y administrador</h2>
+          ${dias.length ? `<div class="table-responsive" style="max-height:420px"><table class="table table-sm align-middle mb-0">
+          <thead class="sticky-top bg-white"><tr><th>Fecha</th><th>Administrador</th><th class="num">Cargas</th><th class="num">Ingresado</th></tr></thead>
+          <tbody>${dias.map((g) => g.filas.map((x, i) => `<tr>${i === 0 ? `<td rowspan="${g.filas.length + 1}" class="fw-semibold text-nowrap">${fecha(g.dia + ' 00:00:00')}</td>` : ''}
+            <td>${esc(x.administrador)}</td><td class="num">${x.cantidad}</td><td class="num">${pesos(x.total)}</td></tr>`).join('')
+            + `<tr class="table-light fw-semibold"><td>Subtotal del día</td><td class="num">${g.cantidad}</td><td class="num">${pesos(g.total)}</td></tr>`).join('')}</tbody>
+          </table></div>` : '<p class="text-secondary mb-0">Sin datos.</p>'}</div></div>
+        <div class="col-lg-5"><div class="card p-3 h-100"><h2 class="h6 fw-bold">Por curso</h2>
+          ${tablaBarras(d.por_curso.map((x) => ({ nombre: x.curso, cantidad: x.cantidad, total: x.total })), 'Curso').replace('<th class="num">Ventas</th>', '<th class="num">Cargas</th>')}</div></div>
+      </div>
+      <div class="card mb-3"><div class="p-3 pb-2 d-flex justify-content-between align-items-center"><h2 class="h5 fw-bold mb-0">Detalle de cargas</h2>
+        <span class="small text-secondary">${d.detalle.length >= 1000 ? 'Mostrando las 1.000 más recientes (el Excel trae todas)' : `${d.detalle.length} cargas`}</span></div>
+        ${d.detalle.length ? `<div class="table-responsive" style="max-height:70vh"><table class="table table-sm table-striped align-middle mb-0 small">
+        <thead class="sticky-top bg-white"><tr><th>Fecha y hora</th><th>Administrador</th><th>Persona</th><th>Curso</th><th>Tipo</th><th class="num">Valor</th><th>Observación</th></tr></thead>
+        <tbody>${d.detalle.map((x) => `<tr><td class="text-nowrap">${fechaHora(x.fecha_hora)}</td><td>${esc(x.administrador)}</td>
+          <td><a href="#persona/${x.persona_id}">${esc(x.persona)}</a></td><td>${esc(x.curso)}</td><td>${TIPO_CARGA[x.tipo] || x.tipo}</td>
+          <td class="num fw-semibold ${x.valor < 0 ? 'text-danger' : ''}">${pesos(x.valor)}</td>
+          <td style="min-width:140px">${esc(x.observacion || '')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="p-3 text-secondary mb-0">Sin cargas.</p>'}</div>`;
+    qs('#iContenido').querySelectorAll('[data-admin]').forEach((tr) => tr.addEventListener('click', () => {
+      form.admin_id.value = form.admin_id.value === tr.dataset.admin ? '' : tr.dataset.admin;
+      cargar().catch((e) => aviso(e.message, 'danger'));
+    }));
+  };
+  let t;
+  form.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => cargar().catch((e) => aviso(e.message, 'danger')), 350); });
+  form.addEventListener('submit', (e) => e.preventDefault());
+  qs('#iLimpiar').addEventListener('click', () => { form.reset(); [...form.elements].forEach((el) => { if (el.name) el.value = ''; }); cargar().catch((e) => aviso(e.message, 'danger')); });
+  C.querySelectorAll('[data-exportar]').forEach((b) => b.addEventListener('click', () => {
+    location.href = `/api/admin/reportes/${b.dataset.exportar}?formato=xlsx&${filtros()}`;
+  }));
+  await cargar();
+}
+
 // ===================================================================== MÉTRICAS E HISTORIAL
 const TIPO_ACT = {
   VENTA: ['Venta', 'success'], ANULACION: ['Anulación', 'danger'], CARGA: ['Carga de saldo', 'primary'],
@@ -984,15 +1060,10 @@ async function vistaConfig() {
           <div class="mb-3"><label class="form-label">Nombre de la feria</label><input class="form-control" name="nombre_feria" value="${esc(cfg.nombre_feria)}"></div>
           <div class="mb-3"><label class="form-label">Alerta de saldo bajo cuando sea menor que</label>
             <div class="input-group"><span class="input-group-text">$</span><input class="form-control" name="saldo_bajo" inputmode="numeric" value="${cfg.saldo_bajo.toLocaleString('es-CO')}"></div></div>
-          <div class="row g-2 mb-3"><div class="col-6"><label class="form-label">Día 1 de la feria</label><input type="date" class="form-control" name="fecha_dia1" value="${esc(cfg.fecha_dia1)}"></div>
-            <div class="col-6"><label class="form-label">Día 2 (último día)</label><input type="date" class="form-control" name="fecha_dia2" value="${esc(cfg.fecha_dia2)}"></div></div>
-          <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="cfgLim" name="limite_diario_activo" value="1" ${cfg.limite_diario_activo ? 'checked' : ''}>
-            <label class="form-check-label" for="cfgLim">Separar el saldo por día (el saldo del día 2 no se puede gastar antes del día 2)</label></div>
-          <div class="input-group mb-1" style="max-width:340px"><span class="input-group-text">Primera carga: día 1</span><input class="form-control" name="porcentaje_dia1" type="number" min="1" max="100" value="${cfg.porcentaje_dia1}"><span class="input-group-text">%</span></div>
-          <div class="form-text mb-3">Con 50 %, una primera carga de $25.000 queda en $12.500 para el día 1 y $12.500 reservados para el día 2.
-            Desde la segunda recarga se elige el día (o dividir). El día 2 se puede gastar todo, incluido lo que sobró del día 1.</div>
+          <div class="mb-3" style="max-width:260px"><label class="form-label">Fecha de la feria</label><input type="date" class="form-control" name="fecha_feria" value="${esc(cfg.fecha_feria)}"></div>
+          <div class="form-text mb-3">La feria es de un solo día: cada persona puede gastar todo su saldo. Lo que no gaste queda en su cuenta.</div>
           <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="cfgSolo" name="solo_dias_feria" value="1" ${cfg.solo_dias_feria ? 'checked' : ''}>
-            <label class="form-check-label" for="cfgSolo">Permitir compras solo en los dos días de feria (desactívelo para hacer pruebas)</label></div>
+            <label class="form-check-label" for="cfgSolo">Permitir compras solo el día de la feria (desactívelo para hacer pruebas)</label></div>
           <p class="small text-secondary">Fecha de hoy en el servidor: ${fecha(cfg.hoy + ' 00:00:00')}</p>
           <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Guardar configuración</button>
         </form></div></div>
@@ -1021,7 +1092,6 @@ async function vistaConfig() {
   qs('#formCfg').addEventListener('submit', async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target).entries());
-    d.limite_diario_activo = !!d.limite_diario_activo;
     d.solo_dias_feria = !!d.solo_dias_feria;
     try { S.cfg = await api('/api/admin/config', { method: 'PUT', body: d }); qs('#nombreFeria').textContent = S.cfg.nombre_feria; aviso('Configuración guardada.'); } catch (ex) { aviso(ex.message, 'danger'); }
   });

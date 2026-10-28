@@ -39,7 +39,7 @@ const EMPRENDIMIENTOS = [
     const [r] = await conn.query(
       `INSERT INTO estudiantes (tipo, nombre_completo, curso_id, identificacion, saldo_inicial, saldo, qr_token, creado_en, actualizado_en)
        VALUES (?,?,?,?,?,0,?,?,?)`, [tipo, nombre, curso ? cursoId[curso] : null, String(1000 + k), saldo, nuevoTokenQR(), fecha, fecha]);
-    await saldos.moverSaldo(conn, { estudianteId: r.insertId, adminId: admin.id, tipo: 'INICIAL', valor: saldo, dia: 'AMBOS', observacion: 'Saldo inicial asignado' });
+    await saldos.moverSaldo(conn, { estudianteId: r.insertId, adminId: admin.id, tipo: 'INICIAL', valor: saldo, observacion: 'Saldo inicial asignado' });
   });
   await persona('ESTUDIANTE', 'Juan Pérez', '10°', 25000);
   for (const c of CURSOS) {

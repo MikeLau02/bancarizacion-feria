@@ -217,7 +217,7 @@ títulos; se reconocen estos nombres (sin importar mayúsculas ni tildes):
 | Identificación | `identificacion`, `documento`, `codigo`, `id` | Sí |
 | Tipo o rol | `tipo`, `rol` (ESTUDIANTE, DOCENTE, DIRECTIVO, ADMINISTRATIVO, FAMILIA, OTRO) | No (vacío = estudiante) |
 | Curso | `curso`, `grado` | No (se crea si no existe) |
-| Saldo inicial | `saldo`, `valor` | No (se divide entre día 1 y día 2) |
+| Saldo inicial | `saldo`, `valor` | No (todo queda disponible para el día de la feria) |
 
 Antes de importar se muestra una vista previa. Al terminar dice cuántas personas se registraron y qué filas
 tuvieron errores (por ejemplo, identificación repetida), para corregirlas y subir solo esas.

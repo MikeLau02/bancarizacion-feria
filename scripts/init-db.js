@@ -29,6 +29,11 @@ const { ahora } = require('../src/utils');
   await conn.query(sql);
   console.log(`✔ Tablas creadas/verificadas en la base "${database}".`);
 
+  // Feria de un solo día: el saldo que quedó reservado para el "día 2" (versión anterior) pasa al saldo
+  // principal. El saldo total de cada persona no cambia; solo deja de estar reservado.
+  const [unidos] = await conn.query('UPDATE estudiantes SET saldo_dia1 = saldo_dia1 + saldo_dia2, saldo_dia2 = 0 WHERE saldo_dia2 <> 0');
+  if (unidos.affectedRows) console.log(`✔ Saldo reservado para el día 2 liberado en ${unidos.affectedRows} cuentas (feria de un solo día).`);
+
   // La primera vez se cargan los cursos del colegio (Jardín a 11)
   const [[{ n: nCursos }]] = await conn.query('SELECT COUNT(*) AS n FROM cursos');
   if (nCursos === 0 && !process.argv.includes('--sin-cursos')) {

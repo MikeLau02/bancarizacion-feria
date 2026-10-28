@@ -96,12 +96,11 @@ function pintarSaldo() {
   const i = estado.info;
   $('cNombre').textContent = i.nombre;
   $('cCurso').textContent = i.curso ? `Curso ${i.curso}` : (i.tipo || '').toLowerCase().replace(/^./, (c) => c.toUpperCase());
-  // Lo que importa al vendedor es lo que se puede gastar HOY
+  // Feria de un solo día: se puede gastar todo el saldo
   $('cSaldo').textContent = pesos(i.disponible_hoy);
   $('cSaldo').className = 'saldo-grande ' + (i.disponible_hoy === 0 ? 'text-danger' : i.disponible_hoy < i.saldo_bajo ? 'text-warning' : 'text-success');
-  $('cEtiqueta').textContent = i.reservado_dia2 > 0 ? 'DISPONIBLE HOY' : 'SALDO DISPONIBLE';
+  $('cEtiqueta').textContent = 'SALDO DISPONIBLE';
   let alerta = '';
-  if (i.reservado_dia2 > 0) alerta += `<div class="text-secondary mt-1"><i class="bi bi-lock"></i> Reservado para el día 2: <strong>${pesos(i.reservado_dia2)}</strong></div>`;
   if (i.mensaje) {
     alerta += `<div class="alert alert-danger fw-bold fs-5 mt-2 mb-0"><i class="bi bi-exclamation-octagon"></i> ${esc(i.mensaje)}</div>`;
   } else if (i.disponible_hoy < i.saldo_bajo) {
@@ -146,20 +145,18 @@ $('formValor').addEventListener('submit', async (e) => {
   const i = estado.info;
   // Verificación inmediata con el saldo consultado...
   if (valor > i.disponible_hoy) {
-    return errorValor(`Saldo insuficiente. Saldo disponible: ${pesos(i.disponible_hoy)}.${i.reservado_dia2 > 0 ? ` (${pesos(i.reservado_dia2)} más están reservados para el día 2)` : ''}`);
+    return errorValor(`Saldo insuficiente. Saldo disponible: ${pesos(i.disponible_hoy)}.`);
   }
   $('btnContinuar').disabled = true;
   try {
     // ...y verificación con el servidor (saldo actualizado al instante)
     const v = await api('/api/ventas/validar', { method: 'POST', body: { qr: estado.qr, valor } });
     estado.valor = valor;
-    Object.assign(estado.info, { saldo: v.saldo, disponible_hoy: v.disponible_hoy, reservado_dia2: v.reservado_dia2 });
+    Object.assign(estado.info, { saldo: v.saldo, disponible_hoy: v.disponible_hoy });
     $('kNombre').textContent = v.nombre;
     $('kValor').textContent = pesos(valor);
     $('kAnterior').textContent = pesos(v.saldo_anterior);
     $('kRestante').textContent = pesos(v.saldo_restante);
-    $('kReservado').innerHTML = v.reservado_dia2 > 0
-      ? `Hoy le quedarán <strong>${pesos(v.disponible_restante)}</strong> para gastar; ${pesos(v.reservado_dia2)} siguen reservados para el día 2.` : '';
     $('errorConfirmar').classList.add('d-none');
     $('btnConfirmar').innerHTML = '<i class="bi bi-check-circle"></i> CONFIRMAR COMPRA';
     actualizarRed(estado.enLinea);
@@ -199,8 +196,6 @@ $('btnConfirmar').addEventListener('click', async () => {
       </div>`;
     if (r.duplicada) detalle += '<div class="alert alert-info mt-3 mb-0">Esta compra ya había quedado registrada. <strong>No se cobró dos veces.</strong></div>';
     if (saldoFinal === 0) detalle += '<div class="alert alert-danger fw-bold mt-3 mb-0">Saldo agotado. Esta persona no puede realizar más compras.</div>';
-    else if (r.reservado_dia2 > 0 && r.disponible_hoy === 0) detalle += `<div class="alert alert-warning fw-semibold mt-3 mb-0">Saldo del día 1 agotado. Tiene ${pesos(r.reservado_dia2)} reservados para el día 2.</div>`;
-    else if (r.reservado_dia2 > 0) detalle += `<div class="alert alert-info mt-3 mb-0">Puede gastar hoy ${pesos(r.disponible_hoy)} más · reservado día 2: ${pesos(r.reservado_dia2)}</div>`;
     else if (typeof r.disponible_hoy === 'number' && r.disponible_hoy < estado.info.saldo_bajo) detalle += `<div class="alert alert-warning fw-semibold mt-3 mb-0">Saldo bajo: le quedan ${pesos(r.disponible_hoy)}.</div>`;
     resultado('bi-check-circle-fill text-success', 'Compra registrada', detalle, 'success', true);
   } catch (e) {

@@ -68,3 +68,10 @@ body { background: var(--feria-fondo); }
 .col-hora:hover, .col-hora:focus { background: rgba(59, 130, 246, .06); }
 .col-eti { text-align: center; font-size: .7rem; color: #5b6472; padding-top: 2px; white-space: nowrap; }
 .tile .valor .sub { font-size: .8rem; font-weight: 400; color: #5b6472; }
+/* Menú del administrador en pantallas medianas (1200-1799 px): más compacto para que quepan todas las pestañas */
+@media (min-width: 1200px) and (max-width: 1799.98px) {
+  .navbar-feria #nombreFeria { display: none !important; }
+  .navbar-feria .navbar-nav .nav-link { padding-left: .45rem; padding-right: .45rem; }
+  .navbar-feria .navbar-nav .nav-link .bi { display: none !important; }
+  .navbar-feria #formBuscar { min-width: 150px !important; }
+}

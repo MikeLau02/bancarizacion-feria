@@ -4,10 +4,8 @@ const { query } = require('../db');
 const CLAVES = {
   nombre_feria: { tipo: 'texto' },
   saldo_bajo: { tipo: 'entero', min: 0 },
-  limite_diario_activo: { tipo: 'bool' },
+  // Fecha del (único) día de feria. Se guarda en la clave fecha_dia1 para conservar la configuración anterior.
   fecha_dia1: { tipo: 'fecha' },
-  fecha_dia2: { tipo: 'fecha' },
-  porcentaje_dia1: { tipo: 'entero', min: 1, max: 100 },
   solo_dias_feria: { tipo: 'bool' },
 };
 
@@ -19,10 +17,7 @@ async function obtenerConfig(conn) {
   return {
     nombre_feria: cfg.nombre_feria || 'Feria de Emprendimiento Escolar',
     saldo_bajo: parseInt(cfg.saldo_bajo || '5000', 10),
-    limite_diario_activo: cfg.limite_diario_activo === '1',
-    fecha_dia1: cfg.fecha_dia1 || '',
-    fecha_dia2: cfg.fecha_dia2 || '',
-    porcentaje_dia1: parseInt(cfg.porcentaje_dia1 || '50', 10),
+    fecha_feria: cfg.fecha_dia1 || '',
     solo_dias_feria: cfg.solo_dias_feria === '1',
   };
 }
@@ -31,8 +26,9 @@ async function obtenerConfig(conn) {
 function normalizar(datos) {
   const salida = {};
   for (const [clave, def] of Object.entries(CLAVES)) {
-    if (!(clave in datos)) continue;
-    let v = datos[clave];
+    const nombre = clave === 'fecha_dia1' ? 'fecha_feria' : clave;
+    if (!(nombre in datos)) continue;
+    let v = datos[nombre];
     if (def.tipo === 'bool') v = v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
     else if (def.tipo === 'entero') {
       const n = parseInt(String(v).replace(/[.$\s]/g, ''), 10);

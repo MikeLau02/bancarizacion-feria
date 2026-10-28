@@ -18,7 +18,6 @@ const ACCIONES = {
 const SESIONES = ['INICIO_SESION', 'INICIO_FALLIDO', 'CIERRE_SESION'];
 const TIPOS = { VENTA: 'Venta', ANULACION: 'Anulación', CARGA: 'Carga de saldo', ADMIN: 'Administración', SESION: 'Ingreso' };
 const CARGAS = { INICIAL: 'Saldo inicial', RECARGA: 'Recarga', AJUSTE: 'Ajuste' };
-const DIAS = { DIA1: 'día 1', DIA2: 'día 2', AMBOS: 'ambos días' };
 
 const fechaValida = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null);
 
@@ -72,8 +71,9 @@ function describir(h) {
   if (h.tipo === 'VENTA') return `Vendió en ${h.emprendimiento} a ${h.persona}${h.estado === 'ANULADA' ? ' (luego anulada)' : ''}`;
   if (h.tipo === 'ANULACION') return `Anuló la venta de ${h.emprendimiento} a ${h.persona}${h.detalle ? ': ' + h.detalle : ''}`;
   if (h.tipo === 'CARGA') {
-    const [dia, ...obs] = String(h.detalle || '').split(' · ');
-    return `${CARGAS[h.accion] || h.accion} a ${h.persona} (${DIAS[dia] || dia})${obs.length ? ' · ' + obs.join(' · ') : ''}`;
+    // detalle = "<día> · <observación>"; el día ya no se muestra (feria de un solo día)
+    const obs = String(h.detalle || '').split(' · ').slice(1);
+    return `${CARGAS[h.accion] || h.accion} a ${h.persona}${obs.length ? ' · ' + obs.join(' · ') : ''}`;
   }
   let det = h.detalle || '';
   try {

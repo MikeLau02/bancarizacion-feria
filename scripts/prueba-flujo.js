@@ -66,9 +66,8 @@ function cliente(base) {
     assert.equal(pag.status, 302);
     paso('cada rol solo accede a sus funciones (vendedor no ve el panel, sin sesión → login)');
 
-    // Para las compras normales: el día 2 ya llegó (todo el saldo se puede gastar)
     const hoy = require('../src/utils').hoy();
-    await admin('PUT', '/api/admin/config', { fecha_dia1: '2000-01-01', fecha_dia2: hoy, saldo_bajo: '5.000' });
+    await admin('PUT', '/api/admin/config', { fecha_feria: hoy, saldo_bajo: '5.000' });
 
     // ---------- registro de persona y QR
     const cursos = (await admin('GET', '/api/admin/cursos')).datos;
@@ -79,14 +78,14 @@ function cliente(base) {
     assert.equal(dup.status, 409);
     const id = nueva.datos.id;
     const [est] = await query('SELECT qr_token, saldo, saldo_dia1, saldo_dia2 FROM estudiantes WHERE id = ?', [id]);
-    assert.deepEqual([est.saldo, est.saldo_dia1, est.saldo_dia2], [25000, 12500, 12500]);
+    assert.deepEqual([est.saldo, est.saldo_dia1, est.saldo_dia2], [25000, 25000, 0]);
     assert.match(est.qr_token, /^[a-f0-9]{32}$/);
     const [{ n: repetidos }] = await query('SELECT COUNT(*) - COUNT(DISTINCT qr_token) AS n FROM estudiantes');
     assert.equal(repetidos, 0);
     const png = await admin('GET', `/api/admin/personas/${id}/qr.png`);
     assert.equal(png.status, 200);
     assert.equal(png.tipo, 'image/png');
-    paso('persona registrada con $25.000 divididos automáticamente: $12.500 día 1 y $12.500 día 2; QR único');
+    paso('persona registrada con $25.000, todo disponible para el día de la feria; QR único');
     const qr = `FERIAQR:${est.qr_token}|Ana Prueba|10°`;
 
     // ---------- consulta del vendedor: datos mínimos
@@ -142,11 +141,11 @@ function cliente(base) {
     assert.equal(an.datos.saldo_nuevo, 12000);
     assert.equal((await admin('POST', `/api/admin/transacciones/${tid}/anular`, { motivo: 'otra vez' })).status, 409);
     paso('anulación solo por administrador: devuelve $12.000 y no se puede anular dos veces');
-    const rec = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'RECARGA', valor: '3.000', dia: 'DIA2', observacion: 'aporte' });
-    assert.deepEqual([rec.datos.saldo_anterior, rec.datos.saldo_nuevo, rec.datos.valor_dia2], [12000, 15000, 3000]);
-    const neg = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'AJUSTE', valor: -20000, dia: 'DIA1', observacion: 'prueba' });
+    const rec = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'RECARGA', valor: '3.000', observacion: 'aporte' });
+    assert.deepEqual([rec.datos.saldo_anterior, rec.datos.saldo_nuevo], [12000, 15000]);
+    const neg = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'AJUSTE', valor: -20000, observacion: 'prueba' });
     assert.equal(neg.status, 409);
-    paso('recarga de $3.000 asignada al día 2 (12.000 → 15.000); ajuste que dejaría saldo negativo rechazado');
+    paso('recarga de $3.000 (12.000 → 15.000); ajuste que dejaría saldo negativo rechazado');
 
     // ---------- bloqueo
     await admin('PUT', `/api/admin/personas/${id}/estado`, { estado: 'BLOQUEADA' });
@@ -164,46 +163,46 @@ function cliente(base) {
     assert.equal(fin.saldo, 0);
     paso(`30 compras simultáneas desde 2 vendedores: exactamente 15 aprobadas, saldo final $0, nunca negativo`);
 
-    // ---------- saldo por día
-    await admin('PUT', '/api/admin/config', { limite_diario_activo: true, fecha_dia1: hoy, fecha_dia2: '2099-01-01', porcentaje_dia1: 50 });
+    // ---------- feria de un solo día: se puede gastar todo el saldo
     const p2 = await admin('POST', '/api/admin/personas', { tipo: 'DOCENTE', nombre_completo: 'Docente Prueba', identificacion: 'T-2', saldo_inicial: 20000 });
     const idDoc = p2.datos.id;
     const [e2] = await query('SELECT qr_token FROM estudiantes WHERE id = ?', [idDoc]);
     const qr2 = e2.qr_token;
     const info2 = (await vend('POST', '/api/ventas/consultar', { qr: qr2 })).datos;
-    assert.deepEqual([info2.disponible_hoy, info2.reservado_dia2], [10000, 10000]);
-    const d1 = await vend('POST', '/api/ventas/compras', { qr: qr2, valor: 7000, codigo_operacion: 'op-limite-000000001' });
+    assert.deepEqual([info2.disponible_hoy, info2.saldo, info2.reservado_dia2], [20000, 20000, undefined]);
+    const d1 = await vend('POST', '/api/ventas/compras', { qr: qr2, valor: 15000, codigo_operacion: 'op-limite-000000001' });
     assert.equal(d1.status, 201);
-    const d2 = await vend('POST', '/api/ventas/compras', { qr: qr2, valor: 4000, codigo_operacion: 'op-limite-000000002' });
+    const d2 = await vend('POST', '/api/ventas/compras', { qr: qr2, valor: 6000, codigo_operacion: 'op-limite-000000002' });
     assert.equal(d2.status, 409);
-    assert.equal(d2.datos.error, 'Saldo insuficiente. Saldo disponible: $3.000. ($10.000 más están reservados para el día 2)');
-    const d3 = await vend('POST', '/api/ventas/compras', { qr: qr2, valor: 3000, codigo_operacion: 'op-limite-000000003' });
-    assert.equal(d3.status, 201);
-    const agoDia = (await vend('POST', '/api/ventas/consultar', { qr: qr2 })).datos;
-    assert.equal(agoDia.alerta, 'DIA_AGOTADO');
-    paso('día 1: solo se gasta la mitad ($10.000 de $20.000); la otra mitad queda reservada para el día 2');
-    const r1 = await admin('POST', `/api/admin/personas/${idDoc}/saldo`, { tipo: 'RECARGA', valor: 4000, dia: 'DIA1' });
-    assert.equal(r1.datos.valor_dia1, 4000);
-    const r2 = await admin('POST', `/api/admin/personas/${idDoc}/saldo`, { tipo: 'RECARGA', valor: 4000, dia: 'AMBOS' });
-    assert.deepEqual([r2.datos.valor_dia1, r2.datos.valor_dia2], [2000, 2000]);
-    assert.equal((await vend('POST', '/api/ventas/consultar', { qr: qr2 })).datos.disponible_hoy, 6000);
-    paso('recargas desde la segunda: asignada al día 1 ($4.000) o dividida entre los dos días ($2.000 + $2.000)');
-    await admin('PUT', '/api/admin/config', { fecha_dia1: '2000-01-01', fecha_dia2: hoy });
-    const d4 = await vend('POST', '/api/ventas/compras', { qr: qr2, valor: 18000, codigo_operacion: 'op-limite-000000004' });
+    assert.equal(d2.datos.error, 'Saldo insuficiente. Saldo disponible: $5.000.');
+    // el comprador ve cuánto le queda si no lo gasta todo
+    const miCuenta = (await cliente(base)('POST', '/api/publico/consulta', { qr: qr2 })).datos;
+    assert.deepEqual([miCuenta.saldo, miCuenta.disponible_hoy, miCuenta.total_cargado, miCuenta.total_gastado], [5000, 5000, 20000, 15000]);
+    const d3 = await vend('POST', '/api/ventas/compras', { qr: qr2, valor: 5000, codigo_operacion: 'op-limite-000000003' });
+    assert.deepEqual([d3.status, d3.datos.saldo_posterior, d3.datos.agotado], [201, 0, true]);
+    assert.equal((await vend('POST', '/api/ventas/consultar', { qr: qr2 })).datos.alerta, 'AGOTADO');
+    paso('un solo día: se gastan los $20.000 completos; el comprador ve cuánto le queda ($5.000) antes de agotarlo');
+    // cuentas que venían de la versión de dos días (saldo reservado en saldo_dia2): todo queda disponible
+    await query('UPDATE estudiantes SET saldo = 8000, saldo_dia1 = 3000, saldo_dia2 = 5000 WHERE id = ?', [idDoc]);
+    await query(`INSERT INTO recargas (estudiante_id, admin_id, tipo, dia, valor, valor_dia1, valor_dia2, saldo_anterior, saldo_nuevo, fecha_hora)
+      SELECT ?, id, 'AJUSTE', 'DIA1', 8000, 8000, 0, 0, 8000, NOW() FROM usuarios WHERE rol = 'ADMIN' LIMIT 1`, [idDoc]);
+    assert.equal((await vend('POST', '/api/ventas/consultar', { qr: qr2 })).datos.disponible_hoy, 8000);
+    const d4 = await vend('POST', '/api/ventas/compras', { qr: qr2, valor: 7000, codigo_operacion: 'op-limite-000000004' });
     assert.equal(d4.status, 201);
-    assert.equal(d4.datos.saldo_posterior, 0);
-    const [t4] = await query('SELECT id, valor_dia1, valor_dia2 FROM transacciones WHERE codigo_operacion = ?', ['op-limite-000000004']);
-    assert.deepEqual([t4.valor_dia1, t4.valor_dia2], [6000, 12000]);
-    await admin('POST', `/api/admin/transacciones/${t4.id}/anular`, { motivo: 'prueba de devolución por día' });
-    const [e2b] = await query('SELECT saldo_dia1, saldo_dia2 FROM estudiantes WHERE id = ?', [idDoc]);
-    assert.deepEqual([e2b.saldo_dia1, e2b.saldo_dia2], [6000, 12000]);
-    paso('día 2: se gasta todo (sobrante del día 1 + día 2); al anular, cada peso vuelve a su día');
-    await admin('PUT', '/api/admin/config', { solo_dias_feria: true, fecha_dia1: '2000-01-01', fecha_dia2: '2000-01-02' });
+    const [t4] = await query('SELECT id FROM transacciones WHERE codigo_operacion = ?', ['op-limite-000000004']);
+    await admin('POST', `/api/admin/transacciones/${t4.id}/anular`, { motivo: 'prueba de devolución' });
+    const r1 = await admin('POST', `/api/admin/personas/${idDoc}/saldo`, { tipo: 'RECARGA', valor: 2000 });
+    assert.equal(r1.datos.saldo_nuevo, 10000);
+    const [e2b] = await query('SELECT saldo, saldo_dia1, saldo_dia2 FROM estudiantes WHERE id = ?', [idDoc]);
+    assert.deepEqual([e2b.saldo, e2b.saldo_dia1, e2b.saldo_dia2], [10000, 10000, 0]);
+    paso('el saldo que estaba reservado para el "día 2" (versión anterior) se puede gastar; al recargar queda en un solo saldo');
+    await admin('PUT', '/api/admin/config', { solo_dias_feria: true, fecha_feria: '2000-01-01' });
     const p3 = await admin('POST', '/api/admin/personas', { tipo: 'OTRO', nombre_completo: 'Visitante', identificacion: 'T-3', saldo_inicial: 5000 });
     const [e3] = await query('SELECT qr_token FROM estudiantes WHERE id = ?', [p3.datos.id]);
     assert.equal((await vend('POST', '/api/ventas/compras', { qr: e3.qr_token, valor: 1000, codigo_operacion: 'op-fuera-0000000001' })).status, 409);
-    await admin('PUT', '/api/admin/config', { solo_dias_feria: false });
-    paso('con "solo días de feria" activo, fuera de esas fechas no se puede comprar');
+    await admin('PUT', '/api/admin/config', { solo_dias_feria: false, fecha_feria: hoy });
+    assert.equal((await admin('GET', '/api/admin/config')).datos.fecha_feria, hoy);
+    paso('con "solo el día de la feria" activo, otro día no se puede comprar');
 
     // ---------- consistencia contable
     const [{ n: descuadres }] = await query('SELECT COUNT(*) AS n FROM estudiantes WHERE saldo <> saldo_dia1 + saldo_dia2');
@@ -291,8 +290,8 @@ function cliente(base) {
     assert.equal(imp.datos.creadas, 40);
     assert.equal(imp.datos.errores.length, 1);
     assert.ok(manuales.every((r) => r.status === 201));
-    const [p6c] = await query("SELECT COUNT(*) AS n, SUM(saldo_dia1) AS d1, SUM(saldo_dia2) AS d2 FROM estudiantes WHERE identificacion BETWEEN '9001' AND '9040'");
-    assert.deepEqual([p6c.n, p6c.d1, p6c.d2], [40, 400000, 400000]);
+    const [p6c] = await query("SELECT COUNT(*) AS n, SUM(saldo) AS s, SUM(saldo_dia2) AS d2 FROM estudiantes WHERE identificacion BETWEEN '9001' AND '9040'");
+    assert.deepEqual([p6c.n, Number(p6c.s), Number(p6c.d2)], [40, 800000, 0]);
     paso('dos administradores a la vez: uno importa 40 personas desde Excel (rechaza la repetida) y el otro registra 10 a mano');
 
     // ---------- cursos del colegio
@@ -349,6 +348,27 @@ function cliente(base) {
     assert.equal((await vend('GET', '/api/admin/historial')).status, 403);
     paso('métricas (ventas por hora, por día, por usuario) e historial de quién hizo qué, con filtros y exportación a Excel');
 
+    // ---------- ingresos por administrador (cuadre de caja)
+    const [{ id: idAdmin2 }] = await query("SELECT id FROM usuarios WHERE usuario = 'admin2'");
+    const personaIng = (await query('SELECT estudiante_id AS id FROM recargas ORDER BY id DESC LIMIT 1'))[0].id;
+    await admin2('POST', `/api/admin/personas/${personaIng}/saldo`, { tipo: 'RECARGA', valor: '7.000' });
+    await admin2('POST', `/api/admin/personas/${personaIng}/saldo`, { tipo: 'RECARGA', valor: 3000 });
+    const ing = (await admin('GET', '/api/admin/ingresos')).datos;
+    const [{ t: totalRec }] = await query('SELECT COALESCE(SUM(valor),0) AS t FROM recargas');
+    assert.equal(ing.resumen.total, totalRec);
+    assert.equal(ing.por_admin.reduce((a, x) => a + Number(x.total), 0), totalRec);
+    const ingA2 = (await admin('GET', `/api/admin/ingresos?admin_id=${idAdmin2}&tipo=RECARGA`)).datos;
+    const [{ t: totA2, n: nA2 }] = await query("SELECT COALESCE(SUM(valor),0) AS t, COUNT(*) AS n FROM recargas WHERE admin_id = ? AND tipo = 'RECARGA'", [idAdmin2]);
+    assert.deepEqual([ingA2.resumen.total, ingA2.resumen.cantidad], [totA2, nA2]);
+    assert.ok(ingA2.detalle.every((x) => x.admin_id === idAdmin2 && x.tipo === 'RECARGA'));
+    assert.ok(totA2 >= 10000);
+    const cuadreAdm = (await admin('GET', `/api/admin/reportes/ingresos-admin?admin_id=${idAdmin2}`)).datos;
+    assert.equal(cuadreAdm.filas[cuadreAdm.filas.length - 1].dia, 'TOTAL');
+    assert.equal(cuadreAdm.filas[cuadreAdm.filas.length - 1].total, ingA2.por_admin.length ? (await admin('GET', `/api/admin/ingresos?admin_id=${idAdmin2}`)).datos.resumen.total : 0);
+    assert.equal((await admin('GET', `/api/admin/reportes/recargas?formato=xlsx&admin_id=${idAdmin2}`)).status, 200);
+    assert.equal((await vend('GET', '/api/admin/ingresos')).status, 403);
+    paso('ingresos por administrador: totales por admin, día, tipo y curso con filtros, cuadre diario y Excel');
+
     // ---------- reinicio interno después de la prueba piloto
     const { reiniciarSiSePide } = require('../src/services/reinicio');
     const cxR = await mysql.createConnection(config.db);
@@ -371,13 +391,13 @@ function cliente(base) {
     await cxR.end();
     // el vendedor ya no existe; la persona bloqueada se activa con su primera recarga
     assert.equal((await vend('POST', '/api/ventas/consultar', { qr })).status, 401);
-    const primera = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'RECARGA', valor: 20000, dia: 'DIA1' });
+    const primera = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'RECARGA', valor: 20000 });
     assert.equal(primera.datos.activada, true);
-    assert.deepEqual([primera.datos.valor_dia1, primera.datos.valor_dia2], [10000, 10000]);
+    assert.equal(primera.datos.saldo_nuevo, 20000);
     const [{ estado: est1, saldo_inicial: si1 }] = await query('SELECT estado, saldo_inicial FROM estudiantes WHERE id = ?', [id]);
     assert.deepEqual([est1, si1], ['ACTIVA', 20000]);
     await admin('PUT', `/api/admin/personas/${id}/estado`, { estado: 'BLOQUEADA' });
-    const segunda = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'RECARGA', valor: 5000, dia: 'DIA1' });
+    const segunda = await admin('POST', `/api/admin/personas/${id}/saldo`, { tipo: 'RECARGA', valor: 5000 });
     assert.equal(segunda.datos.activada, false);
     assert.equal((await query('SELECT estado FROM estudiantes WHERE id = ?', [id]))[0].estado, 'BLOQUEADA');
     paso('reinicio interno tras la prueba piloto: borra ventas, cargas, emprendimientos e historial, conserva personas y QR, todas en $0 bloqueadas; la primera recarga activa la cuenta');

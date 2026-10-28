@@ -1,7 +1,7 @@
 # Feria QR · Pagos con código QR para la Feria de Emprendimiento escolar
 
 Aplicación web para que la comunidad educativa compre en los emprendimientos de la feria **sin dinero en efectivo**:
-cada persona tiene un **saldo virtual** (separado en saldo del día 1 y saldo del día 2) y un **código QR único**;
+cada persona tiene un **saldo virtual** (la feria es de **un solo día**: puede gastarlo todo) y un **código QR único**;
 el vendedor escanea el QR con el celular, escribe el valor y confirma. El saldo vive en la base de datos MySQL,
 nunca en el celular. Hay tres módulos: **administración**, **vendedores** (emprendimientos) y **compradores**
 (cada persona consulta su saldo e historial).
@@ -120,11 +120,12 @@ para la cámara: toque **Permitir**.
 npm test
 ```
 
-Crea una base de datos temporal `feria_qr_prueba` y prueba todo el flujo (22 pruebas): compras del ejemplo
+Crea una base de datos temporal `feria_qr_prueba` y prueba todo el flujo (27 pruebas): compras del ejemplo
 ($25.000 → $20.000 → $12.000 → $0), mensajes de saldo insuficiente y agotado, compra duplicada, 30 compras
-simultáneas desde dos vendedores, cuenta bloqueada, QR inexistente, anulación, saldo por día (primera carga dividida,
-recargas por día, día 1 y día 2), responsables de emprendimiento, consulta del comprador, reportes en Excel/CSV,
-PDF de QR y cuadre contable. No toca la base real.
+simultáneas desde dos vendedores, cuenta bloqueada, QR inexistente, anulación, feria de un solo día (se gasta todo el
+saldo, también el que estaba reservado en la versión de dos días), responsables de emprendimiento, consulta del
+comprador (cuánto le queda), reportes en Excel/CSV, PDF de QR, importación, métricas, ingresos, reinicio y cuadre
+contable. No toca la base real.
 
 ---
 
@@ -132,16 +133,14 @@ PDF de QR y cuadre contable. No toca la base real.
 
 ### Antes de la feria (administrador)
 
-1. **Configuración** → escriba las fechas del **día 1** y **día 2**, el valor de **saldo bajo** (p. ej. $5.000),
-   deje activo **"Separar el saldo por día"** y el porcentaje de la primera carga para el día 1 (50 %).
+1. **Configuración** → escriba la **fecha de la feria** y el valor de **saldo bajo** (p. ej. $5.000).
    Los **cursos** del colegio ya vienen creados: Jardín, Transición, 1° a 7°, 8A, 8B, 9°, 10°, 11A y 11B
    (si faltan, use **Cargar cursos del colegio**). Al importar, "9", "9°" o "8 a" se reconocen como el curso correcto.
 2. **Personas** → **Nueva persona** (o **Importar Excel/CSV**: sube directamente el archivo `.xlsx` de Excel o un `.csv` con columnas
    `nombre, tipo, curso, identificacion, saldo`; hay plantillas para descargar). El rol puede ser estudiante, docente, directivo, administrativo,
-   familia u otro. El saldo inicial se divide solo: mitad para el día 1 y mitad reservada para el día 2.
+   familia u otro. Todo el saldo inicial queda disponible para gastar el día de la feria.
    Al guardar se genera automáticamente el QR único.
-3. **Recargas** → en la ficha de la persona, **Recargar saldo**: desde la segunda carga se elige si el dinero es
-   para el **día 1**, el **día 2** o **dividido entre los dos días**, según lo que quiera el comprador.
+3. **Recargas** → en la ficha de la persona, **Recargar saldo**. El valor se suma al saldo y se puede gastar de inmediato.
 4. **Emprendimientos** → registre cada puesto: nombre, **responsables elegidos entre las personas registradas**
    (buscador), **curso o rol**, categoría, productos, y el **usuario y contraseña** del vendedor (la contraseña se puede
    cambiar cuando quiera).
@@ -164,9 +163,9 @@ En **Mis ventas** el vendedor ve únicamente las ventas de su emprendimiento: n�
 ### Compradores: consultar mi saldo
 
 En la página de inicio, **"Soy comprador: consultar mi saldo"** (o la dirección `/consulta/`). Cada persona escanea su
-propio QR, toma una foto de él o escribe el código impreso debajo, y ve: cuánto puede gastar hoy, su saldo del
-día 1, del día 2 y total, el historial de compras (fecha, hora, emprendimiento, compra, saldo restante) y sus
-cargas de saldo. No necesita usuario ni contraseña: el código del QR es secreto y no se puede adivinar.
+propio QR, toma una foto de él o escribe el código impreso debajo, y ve: **cuánto le queda en la cuenta** (lo puede
+gastar todo ese día; si no lo gasta, ahí ve lo que le resta), cuánto se le cargó y cuánto ha gastado, el historial de
+compras (fecha, hora, emprendimiento, compra, saldo que quedó) y sus cargas de saldo. No necesita usuario ni contraseña: el código del QR es secreto y no se puede adivinar.
 
 ### Alertas que muestra el sistema
 
@@ -174,8 +173,7 @@ cargas de saldo. No necesita usuario ni contraseña: el código del QR es secret
 |---|---|
 | Saldo en $0 | "Saldo agotado. Esta persona no puede realizar más compras." |
 | Saldo menor al valor configurado | "Saldo bajo" (amarillo) |
-| Compra mayor al saldo | "Saldo insuficiente. Saldo disponible: $7.000." (si hay saldo reservado, lo indica) |
-| Día 1 y ya gastó su saldo del día 1 | "Saldo del día 1 agotado. Tiene $X reservados para el día 2." |
+| Compra mayor al saldo | "Saldo insuficiente. Saldo disponible: $7.000." |
 | QR que no es de la feria o no existe | "QR no registrado. No existe ninguna cuenta asociada a este código." |
 | Cuenta bloqueada | "La cuenta de … está BLOQUEADA. No puede realizar compras." |
 | Sin conexión | Franja roja "SIN CONEXIÓN" y "La compra NO se pudo confirmar. No entregue el producto todavía." |
@@ -188,6 +186,13 @@ cargas de saldo. No necesita usuario ni contraseña: el código del QR es secret
   (nunca deja el saldo negativo). Cada movimiento guarda valor, saldo anterior, nuevo saldo, fecha, hora y administrador.
 - **Bloquear / activar** una cuenta, y **QR nuevo** si una tarjeta se perdió (el QR anterior deja de funcionar).
 
+### Ingresos por administrador (cuadre de caja)
+
+Menú **Ingresos**: cuánto dinero cargó cada administrador (saldos iniciales, recargas y ajustes), con filtros por fechas,
+administrador, tipo de carga, curso y persona. Muestra el total por administrador, el **cuadre por día y
+administrador** con subtotales, el total por curso y el detalle de cada carga. Se descarga en Excel el cuadre por día o
+el detalle completo, con los mismos filtros.
+
 ### Métricas e historial (administrador)
 
 Menú **Métricas**: ventas, total vendido, compra promedio, compradores distintos, saldo cargado y anulaciones; ventas por
@@ -198,31 +203,28 @@ ingresos y cierres de sesión), con filtros por fechas, usuario, tipo y texto, y
 
 ### Reportes (Excel y CSV)
 
-En **Reportes**, con filtro opcional de fechas: resumen general de la feria, listado de personas y saldo (por día),
+En **Reportes**, con filtro opcional de fechas: resumen general de la feria, listado de personas y saldo restante,
 historial de transacciones (con el rol del comprador), ventas por emprendimiento, compras por persona, ventas por
-curso, ventas por rol, cargas/recargas (con el día asignado) y el **PDF con todos los QR**.
+curso, ventas por rol, cargas/recargas y el **PDF con todos los QR**.
 Cada uno se puede **ver** en pantalla o **descargar** en Excel (.xlsx) o CSV (separado por `;`, se abre directo en Excel).
 
 ---
 
-## 4. La regla de los dos días (saldo por día)
+## 4. Feria de un solo día
 
-"Del monto total, deben gastar la mitad el primer día y la otra mitad el último día."
+La feria se hace en **un solo día**: cada persona puede gastar **todo su saldo** ese día.
 
-Cada persona tiene dos saldos: **saldo del día 1** y **saldo del día 2**.
-
-- **Primera carga** (el saldo inicial): se divide automáticamente, 50 % para el día 1 y 50 % reservado para el día 2.
-  Ejemplo: $25.000 → $12.500 día 1 y $12.500 día 2. El porcentaje se puede cambiar en Configuración.
-- **Desde la segunda recarga** el administrador elige, según lo que pida el comprador: **día 1**, **día 2** o
-  **dividir entre los dos días**. Cada recarga queda registrada con el día al que se asignó.
-- **Antes y durante el día 1** solo se puede gastar el saldo del día 1. El del día 2 aparece como "reservado".
-- **Desde el día 2** se puede gastar todo: lo que sobró del día 1 más el saldo del día 2.
-- Cada compra descuenta primero del saldo del día 1. Si se anula una compra, el dinero vuelve exactamente al día
-  de donde salió.
-- El vendedor ve en grande **"Disponible hoy"** y, debajo, lo reservado para el día 2.
-- La separación por día se puede desactivar en Configuración (entonces todo se puede gastar cualquier día).
-- Opcional: **"Permitir compras solo en los dos días de feria"** bloquea las compras en otras fechas
+- El saldo inicial y cada recarga quedan disponibles de inmediato, sin repartirse entre días.
+- Lo que la persona no gaste **sigue en su cuenta**: el comprador lo ve en **"Consultar mi saldo"** ("Te queda en tu
+  cuenta") y el administrador en la ficha de la persona y en los reportes ("Saldo restante").
+- El vendedor ve en grande el **saldo disponible**; una compra mayor se rechaza con "Saldo insuficiente".
+- Se conservan las personas, saldos, cursos, emprendimientos, usuarios y demás configuraciones.
+  Si venía de la versión de dos días, al iniciar el servidor (`npm run db:init`, que Render ejecuta en cada arranque)
+  el saldo que estaba reservado para el día 2 se une al saldo de la persona; **el total de cada uno no cambia**.
+- Opcional: **"Permitir compras solo el día de la feria"** (en Configuración) bloquea las compras en otras fechas
   (déjelo apagado mientras hacen pruebas).
+
+---
 
 ## 5. Seguridad y control
 
@@ -296,18 +298,18 @@ feria-qr/
 | Tabla | Contenido |
 |---|---|
 | `cursos` | Cursos/grados (Jardín, Transición, 1° a 11°, 8A, 8B, 11A, 11B) |
-| `estudiantes` | Personas con saldo (estudiantes, docentes, etc.): nombre, rol, curso, identificación, saldo inicial, saldo total, saldo del día 1, saldo del día 2, estado, `qr_token` único |
+| `estudiantes` | Personas con saldo (estudiantes, docentes, etc.): nombre, rol, curso, identificación, saldo inicial, saldo, estado, `qr_token` único (las columnas `saldo_dia1`/`saldo_dia2` quedan de la versión de dos días) |
 | `emprendimientos` | Nombre, curso o rol, categoría, productos, activo |
 | `emprendimiento_responsables` | Personas registradas responsables de cada emprendimiento |
 | `usuarios` | Administradores y vendedores (un vendedor pertenece a un emprendimiento) |
-| `transacciones` | Cada compra: comprador (con su rol), emprendimiento, vendedor, valor (y cuánto salió de cada día), fecha y hora, saldo anterior y posterior, estado, datos de anulación |
-| `recargas` | Saldo inicial, recargas y ajustes: valor, día al que se asignó, saldo anterior, nuevo saldo, fecha y hora, administrador |
+| `transacciones` | Cada compra: comprador (con su rol), emprendimiento, vendedor, valor, fecha y hora, saldo anterior y posterior, estado, datos de anulación |
+| `recargas` | Saldo inicial, recargas y ajustes: valor, saldo anterior, nuevo saldo, fecha y hora, administrador |
 | `auditoria` | Bitácora de operaciones administrativas |
-| `configuracion` | Nombre de la feria, saldo bajo, fechas, % de la primera carga para el día 1 |
+| `configuracion` | Nombre de la feria, saldo bajo, fecha de la feria (clave `fecha_dia1`), solo el día de la feria |
 | `sessions` | Sesiones de inicio (la crea el servidor automáticamente) |
 
 Cuadres que siempre se cumplen: **total cargado − total vendido = saldo pendiente de todas las personas**, y para cada
-persona **saldo total = saldo día 1 + saldo día 2** (lo garantiza una restricción `CHECK` de la base de datos).
+persona el saldo nunca es negativo (lo garantiza una restricción `CHECK` de la base de datos).
 
 ---
 
@@ -330,7 +332,7 @@ persona **saldo total = saldo día 1 + saldo día 2** (lo garantiza una restricc
 | "QR no registrado" con un QR correcto | Es posible que se haya generado un QR nuevo para esa persona: imprima el actual desde su ficha. |
 | "Usuario o contraseña incorrectos" con el administrador | Restablezca la contraseña: ponga en `.env` `ADMIN_USUARIO` y `ADMIN_PASSWORD` y ejecute `npm run admin:restablecer`. En Render, agregue la variable `ADMIN_RESTABLECER=1` (ver la guía de internet). |
 | Los vendedores de prueba no entran | Solo existen si cargó la demostración (`npm run db:demo`). Los reales se crean en **Emprendimientos** con su usuario y contraseña. |
-| El día 1 no deja comprar más | Ya gastó su saldo del día 1; el del día 2 está reservado. Si el comprador quiere, recárguele saldo asignado al día 1. |
+| No deja comprar con saldo | Revise que la cuenta esté activa y, si activó "solo el día de la feria", que la fecha de la feria sea la de hoy. |
 
 ## 9. Si ya había instalado la versión anterior
 

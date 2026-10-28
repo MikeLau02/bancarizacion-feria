@@ -13,6 +13,7 @@ const { auditar } = require('../services/auditoria');
 const saldos = require('../services/saldos');
 const cursosSrv = require('../services/cursos');
 const historialSrv = require('../services/historial');
+const { ingresos } = require('../services/ingresos');
 
 const router = express.Router();
 const TIPOS = ['ESTUDIANTE', 'DOCENTE', 'DIRECTIVO', 'ADMINISTRATIVO', 'FAMILIA', 'OTRO'];
@@ -30,7 +31,6 @@ router.get('/dashboard', asyncH(async (req, res) => {
   const cfg = await obtenerConfig();
   const [[personas], [cargado], [vendido], [anuladas], porTipo, porEmp, porDia, recientes, agotados, bajos, porCursoEmp] = await Promise.all([
     query(`SELECT COUNT(*) AS total, COALESCE(SUM(saldo),0) AS saldo_pendiente,
-             COALESCE(SUM(saldo_dia1),0) AS saldo_dia1, COALESCE(SUM(saldo_dia2),0) AS saldo_dia2,
              COALESCE(SUM(saldo = 0),0) AS agotados, COALESCE(SUM(saldo > 0 AND saldo < ?),0) AS bajos,
              COALESCE(SUM(estado = 'BLOQUEADA'),0) AS bloqueadas FROM estudiantes`, [cfg.saldo_bajo]),
     query('SELECT COALESCE(SUM(valor),0) AS total FROM recargas'),
@@ -64,8 +64,6 @@ router.get('/dashboard', asyncH(async (req, res) => {
       total_cargado: cargado.total,
       total_vendido: vendido.total,
       saldo_pendiente: personas.saldo_pendiente,
-      saldo_dia1: personas.saldo_dia1,
-      saldo_dia2: personas.saldo_dia2,
       transacciones: vendido.cantidad,
       agotados: personas.agotados,
       saldo_bajo: personas.bajos,
@@ -75,7 +73,6 @@ router.get('/dashboard', asyncH(async (req, res) => {
     },
     por_tipo: porTipo,
     actualizado: ahora(),
-    dia2_habilitado: hoy() >= (cfg.fecha_dia2 || '0000') || !cfg.limite_diario_activo,
     por_emprendimiento: porEmp,
     por_dia: porDia,
     por_curso_emprendimiento: porCursoEmp,
@@ -383,7 +380,7 @@ router.post('/personas/:id/saldo', asyncH(async (req, res) => {
   const tipo = req.body.tipo === 'AJUSTE' ? 'AJUSTE' : 'RECARGA';
   const valor = aEntero(req.body.valor);
   const r = await transaccion((conn) => saldos.moverSaldo(conn, {
-    estudianteId: id, adminId: req.usuario.id, tipo, valor, dia: req.body.dia, observacion: texto(req.body.observacion),
+    estudianteId: id, adminId: req.usuario.id, tipo, valor, observacion: texto(req.body.observacion),
   }));
   res.json(r);
 }));
@@ -682,6 +679,9 @@ router.get('/auditoria', asyncH(async (req, res) => {
      FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id ORDER BY a.id DESC LIMIT 1000`));
 }));
 
+// Ingresos por administrador (cuadre de caja): cuánto cargó cada uno, con filtros
+router.get('/ingresos', asyncH(async (req, res) => res.json(await ingresos(req.query))));
+
 // Métricas e historial de actividad (quién hizo qué y cuándo)
 router.get('/metricas', asyncH(async (req, res) => res.json(await historialSrv.metricas(req.query))));
 router.get('/historial', asyncH(async (req, res) => {
@@ -697,10 +697,6 @@ router.get('/config', asyncH(async (req, res) => res.json({ ...(await obtenerCon
 router.put('/config', asyncH(async (req, res) => {
   let valores;
   try { valores = normalizar(req.body); } catch (e) { throw new ErrorApp(400, e.message); }
-  const actual = await obtenerConfig();
-  const d1 = valores.fecha_dia1 ?? actual.fecha_dia1;
-  const d2 = valores.fecha_dia2 ?? actual.fecha_dia2;
-  if (d1 && d2 && d2 <= d1) throw new ErrorApp(400, 'La fecha del día 2 debe ser posterior a la del día 1.');
   await transaccion(async (conn) => {
     for (const [clave, valor] of Object.entries(valores)) {
       await conn.query('INSERT INTO configuracion (clave, valor) VALUES (?,?) ON DUPLICATE KEY UPDATE valor = VALUES(valor)', [clave, valor]);
